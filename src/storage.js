@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Where the site keeps everything: an S3 bucket (Gcore object storage in Luxembourg), or a folder for local
-// development. Both offer the small R2-like interface the API uses:
+// development. Both offer the small interface the API uses:
 //   get(key)                                -> {key, size, body, customMetadata, json(), text()} or null
 //   put(key, bytes | string, {customMetadata})
 //   delete(key | [keys])

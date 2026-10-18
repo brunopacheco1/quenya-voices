@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Dependabot opens pull requests to keep Wrangler and the workflow actions up to date.
+# Dependabot opens pull requests to keep the npm packages and the workflow actions up to date.
 # Security alerts and security updates are switched on in the repository settings.
 version: 2
 updates:

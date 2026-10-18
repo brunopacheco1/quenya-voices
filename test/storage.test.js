@@ -91,7 +91,7 @@ test("S3: signed requests, metadata headers, paged listings", async () => {
   }, fakeFetch);
 
   await bucket.put("queue/a&b/r1", "x", { customMetadata: { submitted_at: "2026-10-18" } });
-  await bucket.put("queue/c/r2", "yy");
+  await bucket.put("queue/c/two", "yy");
   assert.equal(requests[0].url, "https://luxembourg-2.storage.gcore.dev/quenya-recordings/queue/a%26b/r1");
   assert.match(requests[0].headers.get("authorization"), /^AWS4-HMAC-SHA256 Credential=id\/\d{8}\/s-ed1\/s3\/aws4_request/);
   assert.equal(requests[0].headers.get("x-amz-meta-submitted_at"), "2026-10-18");
@@ -102,10 +102,10 @@ test("S3: signed requests, metadata headers, paged listings", async () => {
   assert.deepEqual(first.objects, [{ key: "queue/a&b/r1", size: 1, customMetadata: { submitted_at: "2026-10-18" } }]);
   assert.equal(first.truncated, true);
   const second = await bucket.list({ prefix: "queue/", cursor: first.cursor });
-  assert.deepEqual(second.objects, [{ key: "queue/c/r2", size: 2 }]);
+  assert.deepEqual(second.objects, [{ key: "queue/c/two", size: 2 }]);
 
-  assert.equal(await (await bucket.get("queue/c/r2")).text(), "yy");
+  assert.equal(await (await bucket.get("queue/c/two")).text(), "yy");
   assert.equal(await bucket.get("queue/none"), null);
-  await bucket.delete("queue/c/r2");
-  assert.equal(objects.has("queue/c/r2"), false);
+  await bucket.delete("queue/c/two");
+  assert.equal(objects.has("queue/c/two"), false);
 });

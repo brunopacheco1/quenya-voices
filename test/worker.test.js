@@ -8,7 +8,7 @@ import worker from "../src/worker.js";
 import { encodeWav } from "../public/lib/audio.js";
 import { RATE, take } from "./signals.js";
 
-// Just enough of an R2 bucket for the worker.
+// Just enough of a storage bucket for the API.
 class FakeBucket {
   constructor() { this.objects = new Map(); }
   async put(key, value, options = {}) {
