@@ -63,7 +63,7 @@ function setup() {
 const goodTake = () => encodeWav(take([[0.4, "silence"], [1, "speech"], [0.6, "silence"]]), RATE);
 const body = async (response) => response.json();
 
-async function startRecording(call, session = 1, licence = "CC0-1.0") {
+async function startRecording(call, session = 1, licence = "training-only") {
   await call("/api/consent", { method: "POST", json: { licence, agree: true } });
   return body(await call("/api/recordings", { method: "POST", json: { session } }));
 }
@@ -88,7 +88,7 @@ test("a licence is needed before recording, and is chosen once", async () => {
   assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", agree: true } })).status, 400);
   const consent = await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: " Ana  Silva ", agree: true } });
   assert.equal((await body(consent)).credit_name, "Ana Silva");
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC0-1.0", agree: true } })).status, 409);
+  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } })).status, 409);
   me = await body(await ana("/api/me"));
   assert.equal(me.consent.licence, "CC-BY-4.0");
 });
@@ -104,7 +104,7 @@ test("a volunteer records a draft, plays it back, and submits it incomplete only
     assert.equal((await ana(`/api/recordings/${recording.id}/takes/${line}`, { method: "PUT", body: goodTake() })).status, 201);
   }
   const stored = [...env.TAKES.objects.entries()].find(([key]) => key.endsWith("/s01_002.wav"))[1];
-  assert.equal(stored.customMetadata.licence, "CC0-1.0");
+  assert.equal(stored.customMetadata.licence, "training-only");
   assert.equal(stored.customMetadata.checks, "");
   const back = await ana(`/api/recordings/${recording.id}/takes/s01_002`);
   assert.equal(back.headers.get("Content-Type"), "audio/wav");
@@ -147,7 +147,7 @@ test("takes are checked: bad files and failing takes are refused, warnings are k
   assert.match((await body(silent)).error, /Almost nothing/);
   const clipped = encodeWav(take([[0.4, "silence"], [1, "speech", 2], [0.6, "silence"]]).map((x) => Math.max(-1, Math.min(1, x))), RATE);
   assert.equal((await put("s01_001", clipped)).status, 422);
-  const flagged = await put("s01_001", goodTake(), { "X-Take-Checks": "cut_end <script> noisy" });
+  const flagged = await put("s01_001", goodTake(), { "X-Take-Checks": "cut_end <script> noisy cut_end" });
   assert.equal((await body(flagged)).checks, "cut_end noisy");
 });
 
@@ -210,4 +210,91 @@ test("review: redo needs reasons, opens only the named lines, and acceptance loc
   assert.equal(totals.length, 1);
   assert.equal(totals[0].name, "Ana");
   assert.ok(Math.abs(totals[0].seconds - 6) < 0.5);
+});
+
+test("my data: rename, export, and delete everything", async () => {
+  const { ana, env } = setup();
+  const recording = await startRecording(ana, 1, "training-only");
+  await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() });
+  await ana("/api/mic-check", { method: "POST", json: { problems: [], metrics: { roomDb: -70 } } });
+
+  assert.equal((await body(await ana("/api/me/name", { method: "POST", json: { credit_name: "Ana S." } }))).credit_name, "Ana S.");
+  const exported = await ana("/api/me/export");
+  assert.match(exported.headers.get("Content-Disposition"), /attachment/);
+  const data = await body(exported);
+  assert.equal(data.email, "ana@example.org");
+  assert.equal(data.consent.credit_name, "Ana S.");
+  assert.equal(data.recordings[0].takes[0].url, `/api/recordings/${recording.id}/takes/s01_001`);
+  assert.equal(data.mic_checks[0].metrics.roomDb, -70);
+
+  assert.equal((await ana("/api/me", { method: "DELETE", json: {} })).status, 400);
+  const deleted = await body(await ana("/api/me", { method: "DELETE", json: { confirm: "delete" } }));
+  assert.equal(deleted.invitation, "not configured");
+  const left = [...env.TAKES.objects.keys()];
+  assert.equal(left.length, 1);
+  assert.match(left[0], /^erasures\/[0-9a-f]{16}\.json$/);
+  assert.equal((await body(await ana("/api/me"))).consent, null);
+});
+
+test("when the terms change, volunteers accept again with the same licence before recording", async () => {
+  const { ana, env } = setup();
+  const recording = await startRecording(ana, 1, "training-only");
+  const key = [...env.TAKES.objects.keys()].find((k) => k.endsWith("consent.json"));
+  const old = JSON.parse(new TextDecoder().decode(env.TAKES.objects.get(key).bytes));
+  await env.TAKES.put(key, JSON.stringify({ ...old, consent_version: "2000-01-01" }));
+  assert.equal((await body(await ana("/api/me"))).consent_current, false);
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 403);
+  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: "Ana", agree: true } })).status, 400);
+  const renewed = await body(await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } }));
+  assert.equal(renewed.earlier[0].consent_version, "2000-01-01");
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
+});
+
+test("admins manage invitations in the Access group", async (t) => {
+  const { ana, env } = setup();
+  env.ADMINS = "ana@example.org";
+  assert.equal((await ana("/api/admin/invites")).status, 501);
+  Object.assign(env, { CF_ACCOUNT_ID: "acc", ACCESS_GROUP_ID: "grp", CF_API_TOKEN: "token" });
+  let group = { name: "Volunteers", include: [{ email: { email: "ana@example.org" } }], exclude: [], require: [] };
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    calls.push([init.method, url, init.headers.Authorization]);
+    if (init.method === "PUT") group = JSON.parse(init.body);
+    return new Response(JSON.stringify({ success: true, result: group }));
+  });
+  assert.deepEqual((await body(await ana("/api/admin/invites"))).invites, ["ana@example.org"]);
+  assert.equal((await ana("/api/admin/invites", { method: "POST", json: { email: "not an email" } })).status, 400);
+  assert.deepEqual((await body(await ana("/api/admin/invites", { method: "POST", json: { email: " Bea@Example.org" } }))).invites,
+    ["ana@example.org", "bea@example.org"]);
+  assert.deepEqual((await body(await ana("/api/admin/invites", { method: "DELETE", json: { email: "bea@example.org" } }))).invites,
+    ["ana@example.org"]);
+  assert.equal(calls[0][1], "https://api.cloudflare.com/client/v4/accounts/acc/access/groups/grp");
+  assert.equal(calls[0][2], "Bearer token");
+  env.ADMINS = "";
+  assert.equal((await ana("/api/admin/invites")).status, 403);
+});
+
+test("public totals need no sign-in; the training minimum starts the waiting month once", async () => {
+  const { ana, rev, env } = setup();
+  const stats = async () => body(await worker.fetch(new Request("https://x.workers.dev/api/public/stats"), env));
+  assert.deepEqual(await stats(), {
+    accepted_minutes: 0, volunteers: 0, minimum_minutes: 60, minimum_reached_at: null, earliest_training_at: null, training_wait_days: 30,
+  });
+  await env.TAKES.put("accepted/0123456789abcdef/rold000001", "", { customMetadata: { seconds: "3598", name: "" } });
+  assert.equal((await stats()).minimum_reached_at, null);
+
+  const recording = await startRecording(ana);
+  await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() });
+  await ana(`/api/recordings/${recording.id}/submit`, { method: "POST", json: { incomplete_ok: true } });
+  const me = await body(await ana("/api/me"));
+  await rev(`/api/review/${me.volunteer}/${recording.id}`, { method: "POST", json: { decision: "accept" } });
+
+  const after = await stats();
+  assert.equal(after.volunteers, 2);
+  assert.ok(after.accepted_minutes >= 60);
+  assert.ok(after.minimum_reached_at);
+  assert.equal(Date.parse(after.earliest_training_at) - Date.parse(after.minimum_reached_at), 30 * 24 * 3600 * 1000);
+  const mine = await body(await ana("/api/me/contribution"));
+  assert.ok(mine.accepted_minutes > 0 && mine.accepted_minutes < 1);
+  assert.equal(mine.all.volunteers, 2);
 });

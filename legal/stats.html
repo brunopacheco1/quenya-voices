@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+SPDX-License-Identifier: Apache-2.0
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Progress · Quenya Voices</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="stats.js"></script>
+</head>
+<body>
+  <header class="top">
+    <p><a href="./">Quenya Voices</a></p>
+    <h1>Progress</h1>
+  </header>
+  <main class="legal">
+    <p>Volunteers record themselves reading Quenya, to build an open collection of recordings and an open
+      text-to-speech voice for Quenya. Only recordings a reviewer accepted count here.</p>
+    <div class="line">
+      <p class="big"><span id="minutes">…</span> of {{minimum_training_minutes}} minutes of accepted speech</p>
+      <progress id="progress" max="{{minimum_training_minutes}}" value="0" aria-labelledby="minutes"></progress>
+      <p id="volunteers"></p>
+      <p id="training"></p>
+    </div>
+    <h2>How the recordings are used</h2>
+    <p>Training starts only when the accepted recordings reach {{minimum_training_minutes}} minutes, and the first
+      training waits {{training_wait_days}} days after that, so every volunteer has time to check their data or ask
+      for erasure. Only recordings whose volunteers consented to training are used, and a volunteer who asks for
+      erasure is left out of every training after that.</p>
+    <p>Want to take part? Volunteers are invited; see <a href="{{volunteers_issue_url}}">Volunteer voices</a>.</p>
+  </main>
+  <footer class="legal-links"><a href="privacy.html">Privacy Notice</a> · <a href="cookies.html">Cookie Policy</a> ·
+    <a href="terms.html">Terms and Conditions</a> · <a href="stats.html">Progress</a></footer>
+</body>
+</html>

@@ -15,6 +15,11 @@ SPDX-License-Identifier: Apache-2.0
   <header class="top">
     <h1>Quenya Voices</h1>
     <p id="who" class="muted"></p>
+    <nav id="nav" aria-label="Site" hidden>
+      <button id="nav-home" type="button" class="link">Your recordings</button>
+      <button id="nav-account" type="button" class="link">My data</button>
+      <button id="nav-invites" type="button" class="link" hidden>Invitations</button>
+    </nav>
   </header>
 
   <main>
@@ -28,10 +33,10 @@ SPDX-License-Identifier: Apache-2.0
     </section>
 
     <form id="consent" hidden>
-      <h2>Before you record</h2>
+      <h2 id="consent-title">Before you record</h2>
       <div id="consent-intro"></div>
       <fieldset>
-        <legend>Licence for your recordings</legend>
+        <legend>How your recordings are shared</legend>
         <div id="licences"></div>
       </fieldset>
       <p>
@@ -39,14 +44,60 @@ SPDX-License-Identifier: Apache-2.0
         <input id="credit-name" name="credit_name" maxlength="80" autocomplete="name">
       </p>
       <fieldset>
-        <legend>I confirm that</legend>
+        <legend>I confirm</legend>
         <div id="statements"></div>
       </fieldset>
       <p id="consent-error" class="warning" role="alert"></p>
-      <button type="submit" class="primary">Accept and continue</button>
+      <button type="submit" class="primary">Accept</button>
     </form>
 
+    <section id="account" hidden>
+      <h2>My data</h2>
+      <dl class="facts">
+        <dt>E-mail</dt><dd id="account-email"></dd>
+        <dt>Sharing</dt><dd id="account-licence"></dd>
+        <dt>Accepted</dt><dd id="account-accepted"></dd>
+      </dl>
+      <form id="account-name-form" class="bar">
+        <label for="account-name">Name to credit you by</label>
+        <input id="account-name" maxlength="80" autocomplete="name">
+        <button type="submit">Save</button>
+      </form>
+      <h3>Download</h3>
+      <p>Everything we keep about you: your consent, your recordings and their reviews, and your microphone checks.</p>
+      <div class="controls">
+        <a id="account-export" class="button" href="/api/me/export" download>Download my data (JSON)</a>
+        <button id="account-zip" type="button">Download my recordings (ZIP)</button>
+      </div>
+      <h3>Delete my account</h3>
+      <p>This deletes your consent, all your recordings and their reviews, and ends your invitation. It cannot be
+        undone. Recordings already published under an open licence stay with the people who copied them, but are
+        left out of every future release and model.</p>
+      <form id="account-delete-form" class="bar">
+        <label for="account-delete-confirm">Type <b>delete</b> to confirm</label>
+        <input id="account-delete-confirm" autocomplete="off">
+        <button type="submit" class="danger">Delete my account</button>
+      </form>
+    </section>
+
+    <section id="invites" hidden>
+      <h2>Invitations</h2>
+      <p>People on this list can sign in with a one-time code sent to their e-mail. Send them the invitation below
+        yourself; the site does not send e-mails.</p>
+      <form id="invite-form" class="bar">
+        <label for="invite-email">E-mail</label>
+        <input id="invite-email" type="email" autocomplete="off" required>
+        <button type="submit" class="primary">Invite</button>
+      </form>
+      <p id="invite-error" class="warning" role="alert"></p>
+      <ul id="invite-list"></ul>
+      <h3>Invitation text</h3>
+      <textarea id="invite-text" rows="9" readonly></textarea>
+      <button id="invite-copy" type="button">Copy the text</button>
+    </section>
+
     <section id="home" hidden>
+      <div id="contribution" class="line" aria-live="polite"></div>
       <h2>Your recordings</h2>
       <p class="muted">Each recording is one session of the script, 100 lines. Record the lines in any order,
         listen to them, redo them, and submit the recording for review when you are happy with it. Only you can
@@ -191,5 +242,7 @@ SPDX-License-Identifier: Apache-2.0
       </details>
     </section>
   </main>
+  <footer class="legal-links"><a href="privacy.html">Privacy Notice</a> · <a href="cookies.html">Cookie Policy</a> ·
+    <a href="terms.html">Terms and Conditions</a> · <a href="stats.html">Progress</a></footer>
 </body>
 </html>

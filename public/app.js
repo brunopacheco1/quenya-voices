@@ -10,9 +10,10 @@
 import { TAIL_SECONDS, encodeWav, stripStartup } from "./lib/audio.js";
 import { checkMicrophone, checkTake, codes, hasErrors, peakAndClipped } from "./lib/quality.js";
 import { parseScript, sessions } from "./lib/script.js";
+import { zip } from "./lib/zip.js";
 
 const $ = (id) => document.getElementById(id);
-const VIEWS = ["loading", "signed-out", "consent", "home", "mic-check", "summary", "studio", "review"];
+const VIEWS = ["loading", "signed-out", "consent", "home", "mic-check", "summary", "studio", "review", "account", "invites"];
 const MIC_SENTENCE = "Elen síla lúmenn' omentielvo.";
 const CHECK_NAMES = {
   quiet: "quiet", noisy: "noisy", cut_start: "start may be cut", cut_end: "end may be cut",
@@ -33,6 +34,18 @@ function element(tag, properties = {}, ...children) {
   const node = Object.assign(document.createElement(tag), properties);
   node.append(...children);
   return node;
+}
+
+// Text with [label](link) markup, as nodes; the links can only point to pages of this site.
+function withLinks(text) {
+  const nodes = [];
+  let last = 0;
+  for (const match of text.matchAll(/\[([^\]]+)\]\(([a-z-]+\.html)\)/g)) {
+    nodes.push(text.slice(last, match.index), element("a", { href: match[2], target: "_blank", textContent: match[1] }));
+    last = match.index + match[0].length;
+  }
+  nodes.push(text.slice(last));
+  return nodes;
 }
 
 function safeStorage(action) {
@@ -74,12 +87,13 @@ async function apiJson(path, options) {
 }
 
 const date = (iso) => new Date(iso).toLocaleDateString();
+const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 function statusText(recording) {
   return {
     draft: "Draft",
     submitted: `Waiting for review (submitted ${date(recording.submitted_at)})`,
-    redo: `The reviewer asked to redo ${recording.redo.length} lines`,
+    redo: `The reviewer asked to redo ${plural(recording.redo.length, "line")}`,
     accepted: `Accepted on ${date(recording.reviewed_at)}`,
   }[recording.status];
 }
@@ -187,6 +201,17 @@ class App {
     $("next").onclick = () => this.move(1);
     $("recheck").onclick = () => this.micCheck(() => this.openStudio(this.lineIndex));
     $("check-back").onclick = () => (this.recording ? this.openSummary() : this.home());
+    $("nav-home").onclick = () => this.state === "idle" && this.home();
+    $("nav-account").onclick = () => this.state === "idle" && this.account();
+    $("nav-invites").onclick = () => this.state === "idle" && this.invites();
+    $("nav-invites").hidden = !this.me.admin;
+    $("nav").hidden = false;
+    $("account-name-form").onsubmit = (event) => this.saveName(event);
+    $("account-zip").onclick = () => this.downloadRecordings();
+    $("account-delete-form").onsubmit = (event) => this.deleteAccount(event);
+    $("invite-form").onsubmit = (event) => this.invite(event);
+    $("invite-copy").onclick = () => navigator.clipboard?.writeText($("invite-text").value)
+      .then(() => setMessage("Invitation text copied."), () => $("invite-text").select());
     const autoNext = safeStorage((s) => s.getItem("autoNext"));
     if (autoNext !== null) $("auto-next").checked = autoNext === "1";
     $("auto-next").onchange = () => safeStorage((s) => s.setItem("autoNext", $("auto-next").checked ? "1" : "0"));
@@ -232,9 +257,24 @@ class App {
     }));
     const next = this.sessions.find(([session]) => !drafts.has(session) && !submittedCount(session));
     if (next) $("new-session").value = next[0];
+    await this.showContribution();
     $("reviewer-home").hidden = !this.me.reviewer;
     if (this.me.reviewer) await this.reviewerHome();
     show("home");
+  }
+
+  async showContribution() {
+    const mine = await apiJson("/api/me/contribution");
+    const { all } = mine;
+    const minutes = (value) => `${value.toFixed(1)} min`;
+    const parts = [`Your accepted speech: ${minutes(mine.accepted_minutes)}`];
+    if (mine.waiting_minutes) parts.push(`waiting for review: ${minutes(mine.waiting_minutes)}`);
+    if (mine.draft_minutes) parts.push(`in drafts: ${minutes(mine.draft_minutes)}`);
+    const share = all.accepted_minutes ? ` (${Math.round((100 * mine.accepted_minutes) / all.accepted_minutes)}% of all)` : "";
+    $("contribution").replaceChildren(
+      element("p", { className: "big", textContent: `${parts.join(" · ")}${share}` }),
+      element("p", {}, `All volunteers: ${minutes(all.accepted_minutes)} of the ${all.minimum_minutes} min needed before any training. `,
+        element("a", { href: "stats.html", textContent: "Progress" })));
   }
 
   async reviewerHome() {
@@ -255,7 +295,7 @@ class App {
     $("queue-empty").hidden = waiting.length > 0;
     const minutes = (seconds) => (seconds / 60).toFixed(1);
     const total = accepted.reduce((sum, entry) => sum + entry.seconds, 0);
-    $("accepted-total").textContent = `${minutes(total)} minutes of accepted speech from ${accepted.length} volunteers.`;
+    $("accepted-total").textContent = `${minutes(total)} minutes of accepted speech from ${plural(accepted.length, "volunteer")}.`;
     $("accepted").tBodies[0].replaceChildren(...accepted.map((entry) => element("tr", {},
       element("td", { textContent: who(entry) }),
       element("td", { textContent: entry.recordings }),
@@ -367,7 +407,7 @@ class App {
       if (missing) warnings.push(`${missing} of the ${recording.lines.length} lines have no recording yet. They will stay missing in this submission: to record them later you would start a new recording.`);
     }
     const flagged = [...recording.takes.values()].filter((take) => take.checks).length;
-    if (flagged) warnings.push(`${flagged} takes have warnings from the automatic checks; the reviewer may send them back.`);
+    if (flagged) warnings.push(`${plural(flagged, "take")} with warnings from the automatic checks; the reviewer may send them back.`);
     const question = [...warnings, "Submit this recording for review? It is locked while it waits for the review."].join("\n\n");
     if (!window.confirm(question)) return;
     const response = await api(`/api/recordings/${recording.id}/submit`, {
@@ -581,7 +621,7 @@ class App {
     const licence = this.me.terms.licences[submission.licence]?.name || "no licence";
     $("review-title").textContent = `Session ${submission.session} by ${submission.name || `volunteer ${volunteer.slice(0, 6)}`}`;
     $("review-info").textContent = `Round ${submission.round}, submitted ${date(submission.submitted_at)}, `
-      + `${takes.size} of ${lines.length} lines recorded, shared under ${licence}.`;
+      + `${takes.size} of ${lines.length} lines recorded, sharing: ${licence}.`;
     $("review-error").textContent = "";
     const reasons = Object.entries(this.me.reasons);
     $("review-lines").tBodies[0].replaceChildren(...lines.map((line) => {
@@ -646,8 +686,8 @@ class App {
     const redo = {};
     for (const [id, { reason, note }] of this.reviewing.decisions) redo[id] = { reason: reason.value, note: note.value };
     const question = decision === "accept"
-      ? "Accept this recording? All its takes will be used for training."
-      : `Send ${Object.keys(redo).length} lines back to the volunteer? All other lines are accepted and locked.`;
+      ? "Accept this recording? Its takes then count towards training, as the volunteer agreed."
+      : `Send ${plural(Object.keys(redo).length, "line")} back to the volunteer? All other lines are accepted and locked.`;
     if (!window.confirm(question)) return;
     const { volunteer, id } = this.reviewing;
     const response = await api(`/api/review/${volunteer}/${id}`, {
@@ -659,6 +699,125 @@ class App {
     }
     await this.home();
     setMessage(decision === "accept" ? "Recording accepted." : "Lines sent back to the volunteer.");
+  }
+
+  // -- my data --
+
+  account() {
+    this.stopAudio();
+    this.recording = null;
+    setMessage("");
+    const { consent } = this.me;
+    $("account-email").textContent = this.me.email;
+    $("account-licence").textContent = this.me.terms.licences[consent.licence].name.replace(/ \(recommended\)$/, "");
+    $("account-accepted").textContent = new Date(consent.accepted_at).toLocaleString();
+    $("account-name").value = consent.credit_name || "";
+    $("account-name").required = consent.licence === "CC-BY-4.0";
+    show("account");
+  }
+
+  async saveName(event) {
+    event.preventDefault();
+    const response = await api("/api/me/name", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credit_name: $("account-name").value }),
+    });
+    if (!response.ok) return setMessage(await errorText(response), true);
+    this.me.consent = await response.json();
+    showWho(this.me);
+    setMessage("Saved. Recordings published from now on credit you by this name.");
+  }
+
+  async downloadRecordings() {
+    $("account-zip").disabled = true;
+    try {
+      const data = await apiJson("/api/me/export");
+      const files = [{ name: "my-data.json", bytes: new TextEncoder().encode(JSON.stringify(data, null, 2)) }];
+      const takes = data.recordings.flatMap((recording) => recording.takes.map((take) => ({ recording, take })));
+      for (const [index, { recording, take }] of takes.entries()) {
+        setMessage(`Collecting your recordings: ${index + 1} of ${takes.length}…`);
+        const response = await api(take.url);
+        if (!response.ok) throw new Error(await errorText(response));
+        files.push({ name: `session-${recording.session}-${recording.id}/${take.id}.wav`, bytes: new Uint8Array(await response.arrayBuffer()) });
+      }
+      const link = element("a", { href: URL.createObjectURL(zip(files)), download: "quenya-voices-my-recordings.zip" });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setMessage(`Downloaded ${takes.length} recordings.`);
+    } catch (err) {
+      if (!(err instanceof SignedOut)) setMessage(`The download failed: ${err.message}`, true);
+    } finally {
+      $("account-zip").disabled = false;
+    }
+  }
+
+  async deleteAccount(event) {
+    event.preventDefault();
+    if ($("account-delete-confirm").value.trim().toLowerCase() !== "delete") {
+      return setMessage("Type delete in the box to confirm.", true);
+    }
+    const response = await api("/api/me", {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "delete" }),
+    });
+    if (!response.ok) return setMessage(await errorText(response), true);
+    $("nav").hidden = true;
+    $("who").textContent = "";
+    show("signed-out");
+    $("signed-out").querySelector("h2").textContent = "Your account was deleted";
+    $("signed-out-text").textContent = "Your consent and all your recordings were deleted. Thank you for your time.";
+  }
+
+  // -- invitations (admins) --
+
+  async invites() {
+    this.stopAudio();
+    this.recording = null;
+    setMessage("");
+    $("invite-error").textContent = "";
+    $("invite-text").value = [
+      "Hello,",
+      "",
+      "I would like to invite you to record your voice reading Quenya for an open Quenya text-to-speech voice and the book Ma Quetilyë Quenya?.",
+      "",
+      `Open ${location.origin}/ and sign in with this e-mail address: you will get a one-time code by e-mail.`,
+      `Before you start, please read the Privacy Notice (${location.origin}/privacy.html) and the Terms (${location.origin}/terms.html).`,
+      "",
+      "Thank you!",
+    ].join("\n");
+    show("invites");
+    await this.showInvites(() => apiJson("/api/admin/invites"));
+  }
+
+  async showInvites(load) {
+    let invites;
+    try {
+      ({ invites } = await load());
+    } catch (err) {
+      if (!(err instanceof SignedOut)) $("invite-error").textContent = err.message;
+      return;
+    }
+    $("invite-error").textContent = "";
+    $("invite-list").replaceChildren(...invites.map((email) => {
+      const remove = element("button", { type: "button", textContent: "Remove" });
+      remove.setAttribute("aria-label", `Remove the invitation of ${email}`);
+      remove.onclick = () => window.confirm(`Remove ${email}? They can no longer sign in. Their recordings stay.`)
+        && this.showInvites(() => apiJson("/api/admin/invites", {
+          method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+        }));
+      return element("li", {}, element("span", { textContent: email }), remove);
+    }));
+  }
+
+  async invite(event) {
+    event.preventDefault();
+    const email = $("invite-email").value;
+    await this.showInvites(() => apiJson("/api/admin/invites", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+    }));
+    if (!$("invite-error").textContent) {
+      $("invite-email").value = "";
+      setMessage(`${email} can now sign in. Send them the invitation text.`);
+    }
   }
 
   // -- playing --
@@ -717,19 +876,30 @@ class App {
 
 // ---- licence ----
 
+function showWho(me) {
+  const credit = me.consent.credit_name ? `, credited as ${me.consent.credit_name}` : "";
+  $("who").textContent = `Signed in as ${me.email} · your recordings: `
+    + `${me.terms.licences[me.consent.licence].short}${credit}.`;
+}
+
+// Asks for consent; with an earlier consent (the terms changed), the licence stays the one already chosen.
 function askConsent(me) {
   return new Promise((resolve) => {
     const { intro, licences, statements } = me.terms;
-    $("consent-intro").replaceChildren(...intro.map((text) => element("p", { textContent: text })));
+    const previous = me.consent;
+    $("consent-title").textContent = previous ? "The terms have changed" : "Before you record";
+    $("consent-intro").replaceChildren(...intro.map((text) => element("p", {}, ...withLinks(text))));
     $("licences").replaceChildren(...Object.entries(licences).map(([id, licence]) => element("label", {},
-      element("input", { type: "radio", name: "licence", value: id, required: true }),
-      element("span", {}, element("a", { href: licence.url, textContent: licence.name, target: "_blank", rel: "noopener" }),
-        `: ${licence.summary}`))));
+      element("input", { type: "radio", name: "licence", value: id, required: true,
+        checked: previous?.licence === id, disabled: Boolean(previous) && previous.licence !== id }),
+      element("span", {}, element("b", { textContent: licence.name }), `: ${licence.summary} `,
+        licence.url.startsWith("https:") ? element("a", { href: licence.url, textContent: "About the licence", target: "_blank", rel: "noopener" }) : ""))));
     $("statements").replaceChildren(...statements.map((statement) => element("label", {},
-      element("input", { type: "checkbox", required: true }), statement)));
+      element("input", { type: "checkbox", required: true }), element("span", {}, ...withLinks(statement)))));
+    $("credit-name").value = previous?.credit_name || "";
     const updateHint = () => {
       const byName = $("consent").elements.licence.value === "CC-BY-4.0";
-      $("credit-hint").textContent = byName ? "(needed for CC BY; it will be published)" : "(optional, to thank you)";
+      $("credit-hint").textContent = byName ? "(published with your recordings)" : "(optional, to credit you with the voices)";
       $("credit-name").required = byName;
     };
     $("licences").addEventListener("change", updateHint);
@@ -760,10 +930,8 @@ window.addEventListener("unhandledrejection", (event) => {
 async function main() {
   try {
     const me = await apiJson("/api/me");
-    if (!me.consent) me.consent = await askConsent(me);
-    const credit = me.consent.credit_name ? `, credited as ${me.consent.credit_name}` : "";
-    $("who").textContent = `Signed in as ${me.email} · your recordings are shared under `
-      + `${me.terms.licences[me.consent.licence].name}${credit}.`;
+    if (!me.consent_current) me.consent = await askConsent(me);
+    showWho(me);
     show("loading");
     const lines = parseScript(await (await fetch("script.tsv")).text());
     await new App(me, lines).home();

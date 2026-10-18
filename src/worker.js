@@ -11,16 +11,26 @@
 //
 // Storage (R2 bucket bound as TAKES):
 //   volunteers/<volunteer>/consent.json                  licence and statements the volunteer accepted
-//   volunteers/<volunteer>/mic-checks/<time>.json        results of each microphone check
+//   mic-checks/<volunteer>/<time>.json                   results of each microphone check (an R2 lifecycle rule
+//                                                        deletes them after the time in the Privacy Notice)
 //   recordings/<volunteer>/<recording>/recording.json   session, status (draft/submitted), dates
 //   recordings/<volunteer>/<recording>/<line id>.wav    the latest take of each line (a redo replaces it)
 //   reference/<line id>.wav                              TTS reading of a line for Listen (quenya_tts.volunteers)
 //   queue/<volunteer>/<recording>                        marker: submitted and waiting for a reviewer
 //   accepted/<volunteer>/<recording>                     marker: accepted, with its seconds of speech
+//   erasures/<volunteer>.json                            a volunteer deleted their account: drop their local copies
+//   stats/milestones.json                                when the accepted speech first reached the training minimum
 // <volunteer> is derived from the e-mail, so the e-mail itself appears only inside consent.json.
 //
+// Public (no sign-in; the Access application must bypass /api/public/*, see README.md):
+//   GET  /api/public/stats                          accepted minutes, volunteers, minimum and earliest training date
+// Volunteers:
 //   GET  /api/me                                    who is signed in, their consent (or null), the consent text
+//   GET  /api/me/contribution                       the volunteer's accepted, waiting and draft minutes
 //   POST /api/consent                               accept a licence: {licence, credit_name, agree}
+//   POST /api/me/name                               change the name to be credited by: {credit_name}
+//   GET  /api/me/export                             all data kept about the volunteer (audio: the takes URLs)
+//   DELETE /api/me                                  {confirm: "delete"}: erase the account and every recording
 //   POST /api/mic-check                             store a microphone check: {problems, metrics}
 //   GET  /api/recordings                            the volunteer's recordings, newest first
 //   POST /api/recordings                            start a recording: {session}; returns the open draft if any
@@ -35,25 +45,31 @@
 //   GET  /api/review/<volunteer>/<recording>        a submission, its takes and the volunteer's licence
 //   GET  /api/review/<volunteer>/<recording>/takes/<line>   a take
 //   POST /api/review/<volunteer>/<recording>        {decision: "accept" | "redo", redo: {line: {reason, note}}}
+// Admins only (the e-mails in ADMINS):
+//   GET  /api/admin/invites                         invited e-mails (the Access group)
+//   POST /api/admin/invites                         {email}: invite
+//   DELETE /api/admin/invites                       {email}: remove the invitation
 
 import { volunteerEmail } from "./access.js";
-import { CONSENT_VERSION, INTRO, LICENCES, STATEMENTS, consentRecord } from "./consent.js";
+import site from "../site.json" with { type: "json" };
+import { CONSENT_VERSION, INTRO, LICENCES, STATEMENTS, cleanName, consentRecord } from "./consent.js";
+import { changeInvite, invitesConfigured, listInvites, validEmail } from "./invites.js";
 import { decodeWav, readWavHeader, wavProblem } from "../public/lib/audio.js";
-import { checkTake } from "../public/lib/quality.js";
+import { LIMITS, peakAndClipped } from "../public/lib/quality.js";
 import { REASONS, checkReview } from "../public/lib/review.js";
 import { LINE_ID, parseScript, sessionOf } from "../public/lib/script.js";
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
-// Problems the server checks again itself and refuses; the others are only recorded with the take, because
-// the page knows the room noise from the microphone check and judges them better.
-const REFUSED = new Set(["empty", "too_long", "clipped", "silent"]);
+// The server checks again only what is cheap and certain (empty, too long, clipped, silent): the free Workers
+// plan allows 10 ms of CPU per request. The page runs all checks (quality.js) and sends its warning codes.
 const CHECK_CODE = /^[a-z_]{1,20}$/;
 const RECORDING_ID = /^r[0-9a-z]{6,20}$/;
 const VOLUNTEER_ID = /^[0-9a-f]{16}$/;
 
-function isReviewer(email, env) {
-  return (env.REVIEWERS || "").split(",").map((entry) => entry.trim().toLowerCase()).includes(email);
-}
+const listed = (list, email) => (list || "").split(",").map((entry) => entry.trim().toLowerCase()).includes(email);
+const isReviewer = (email, env) => listed(env.REVIEWERS, email);
+const isAdmin = (email, env) => listed(env.ADMINS, email);
+const consentCurrent = (consent) => consent?.consent_version === CONSENT_VERSION;
 
 // Whether the volunteer may (re)record this line now.
 function canRecord(recording, lineId) {
@@ -157,7 +173,7 @@ function audio(object) {
 
 async function putTake(request, env, volunteer, recording, lineId) {
   const consent = await readJson(env, `volunteers/${volunteer}/consent.json`);
-  if (!consent) return error(403, "Choose a licence before recording.");
+  if (!consentCurrent(consent)) return error(403, "Accept the terms before recording.");
   if (!canRecord(recording, lineId)) {
     return error(409, recording.status === "redo"
       ? "Only the lines the reviewer sent back can be recorded again."
@@ -170,21 +186,21 @@ async function putTake(request, env, volunteer, recording, lineId) {
   const header = readWavHeader(bytes);
   const problem = wavProblem(header);
   if (problem) return error(400, `The take was refused: ${problem}.`);
-  const { texts } = await loadScript(env);
-  const { problems, metrics } = checkTake(decodeWav(bytes, header), header.sampleRate, { text: texts.get(lineId) });
-  const refused = problems.find((p) => p.level === "error" && REFUSED.has(p.code));
-  if (refused) return error(422, refused.message, { problems });
-  const pageCodes = (request.headers.get("X-Take-Checks") || "").split(/\s+/).filter((code) => CHECK_CODE.test(code));
-  const checks = [...new Set([...pageCodes, ...problems.map((p) => p.code)])].join(" ");
+  const wave = decodeWav(bytes, header);
+  const seconds = wave.length / header.sampleRate;
+  const { peak, clipped } = peakAndClipped(wave);
+  if (seconds < LIMITS.minSeconds) return error(422, "Nothing was recorded. Record the line again.");
+  if (clipped > 0) return error(422, "Too loud: it clipped. Move back from the microphone or turn the input level down, then record again.");
+  if (peak < LIMITS.silentPeak) return error(422, "Almost nothing was heard. Check the microphone, then record again.");
+  const checks = [...new Set((request.headers.get("X-Take-Checks") || "").split(/\s+/).filter((code) => CHECK_CODE.test(code)))].join(" ");
   await env.TAKES.put(`recordings/${volunteer}/${recording.id}/${lineId}.wav`, bytes, {
     httpMetadata: { contentType: "audio/wav" },
     customMetadata: {
       licence: consent.licence,
       consent_version: consent.consent_version,
       sample_rate: String(header.sampleRate),
-      seconds: metrics.seconds.toFixed(2),
-      peak: metrics.peak.toFixed(3),
-      snr_db: Number.isFinite(metrics.snrDb) ? metrics.snrDb.toFixed(1) : "",
+      seconds: seconds.toFixed(2),
+      peak: peak.toFixed(3),
       checks,
       recorded_at: new Date().toISOString(),
     },
@@ -216,6 +232,9 @@ async function handleRecording(request, env, volunteer, recordingId, rest) {
 
   if (rest === "/submit" && method === "POST") {
     if (!["draft", "redo"].includes(recording.status)) return error(409, "This recording was already submitted.");
+    if (!consentCurrent(await readJson(env, `volunteers/${volunteer}/consent.json`))) {
+      return error(403, "Accept the terms before submitting.");
+    }
     const { sessions } = await loadScript(env);
     const recorded = new Set((await takesOf(env, volunteer, recordingId)).map((take) => take.id));
     if (recorded.size === 0) return error(400, "Record at least one line before submitting.");
@@ -276,13 +295,7 @@ async function handleReview(request, env, reviewer, rest) {
         submitted_at: recording.submitted_at,
       };
     }));
-    const totals = {};
-    for (const marker of await listAll(env, "accepted/", { include: ["customMetadata"] })) {
-      const [, volunteer] = marker.key.split("/");
-      totals[volunteer] ??= { volunteer, name: marker.customMetadata?.name || null, recordings: 0, seconds: 0 };
-      totals[volunteer].recordings += 1;
-      totals[volunteer].seconds += Number(marker.customMetadata?.seconds || 0);
-    }
+    const totals = await acceptedTotals(env);
     return json({
       waiting: waiting.filter(Boolean).sort((a, b) => a.submitted_at.localeCompare(b.submitted_at)),
       accepted: Object.values(totals).sort((a, b) => b.seconds - a.seconds),
@@ -339,11 +352,52 @@ async function handleReview(request, env, reviewer, rest) {
     await env.TAKES.put(`accepted/${volunteer}/${recordingId}`, "", {
       customMetadata: { seconds: seconds.toFixed(1), session: String(recording.session), name: consent?.credit_name || "" },
     });
+    await updateMilestones(env);
   }
   return json(reviewed);
 }
 
+// Accepted speech per volunteer, from the accepted/ markers: {volunteer: {recordings, seconds, name}}.
+async function acceptedTotals(env) {
+  const totals = {};
+  for (const marker of await listAll(env, "accepted/", { include: ["customMetadata"] })) {
+    const [, volunteer] = marker.key.split("/");
+    totals[volunteer] ??= { volunteer, name: marker.customMetadata?.name || null, recordings: 0, seconds: 0 };
+    totals[volunteer].recordings += 1;
+    totals[volunteer].seconds += Number(marker.customMetadata?.seconds || 0);
+  }
+  return totals;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+async function publicStats(env) {
+  const totals = Object.values(await acceptedTotals(env));
+  const seconds = totals.reduce((sum, entry) => sum + entry.seconds, 0);
+  const milestones = (await readJson(env, "stats/milestones.json")) || {};
+  const reached = milestones.minimum_reached_at || null;
+  return {
+    accepted_minutes: Math.round(seconds / 0.6) / 100,
+    volunteers: totals.length,
+    minimum_minutes: site.minimum_training_minutes,
+    minimum_reached_at: reached,
+    earliest_training_at: reached ? new Date(Date.parse(reached) + site.training_wait_days * DAY_MS).toISOString() : null,
+    training_wait_days: site.training_wait_days,
+  };
+}
+
+// Records the first time the accepted speech reaches the training minimum (the waiting month starts then).
+async function updateMilestones(env) {
+  const stats = await publicStats(env);
+  if (!stats.minimum_reached_at && stats.accepted_minutes >= stats.minimum_minutes) {
+    await writeJson(env, "stats/milestones.json", { minimum_reached_at: new Date().toISOString(), minimum_minutes: stats.minimum_minutes });
+  }
+}
+
 async function handleApi(request, env) {
+  if (new URL(request.url).pathname === "/api/public/stats" && request.method === "GET") {
+    return json(await publicStats(env));
+  }
   const email = await volunteerEmail(request, env);
   if (!email) return error(401, "Not signed in. Open the site from your invitation link.");
   const volunteer = await volunteerId(email);
@@ -352,32 +406,121 @@ async function handleApi(request, env) {
   const consentKey = `volunteers/${volunteer}/consent.json`;
 
   if (path === "/api/me" && method === "GET") {
+    const consent = await readJson(env, consentKey);
     return json({
       email,
       volunteer,
       reviewer: isReviewer(email, env),
+      admin: isAdmin(email, env),
       reasons: REASONS,
-      consent: await readJson(env, consentKey),
+      consent,
+      consent_current: consentCurrent(consent),
       terms: { version: CONSENT_VERSION, intro: INTRO, licences: LICENCES, statements: STATEMENTS },
     });
   }
 
   if (path === "/api/consent" && method === "POST") {
-    if (await readJson(env, consentKey)) {
-      return error(409, "You already chose a licence. To change it, write to the project coordinator.");
-    }
-    const record = consentRecord(await requestJson(request), email);
+    const previous = await readJson(env, consentKey);
+    if (consentCurrent(previous)) return error(409, "You already accepted the current terms.");
+    const record = consentRecord(await requestJson(request), email, previous);
     if (record.error) return error(400, record.error);
     await writeJson(env, consentKey, record);
     return json(record, 201);
+  }
+
+  if (path === "/api/me/contribution" && method === "GET") {
+    const mine = (await acceptedTotals(env))[volunteer] || { recordings: 0, seconds: 0 };
+    let waiting = 0;
+    let drafts = 0;
+    for (const recording of await recordingsOf(env, volunteer)) {
+      if (recording.status === "accepted") continue;
+      const seconds = (await takesOf(env, volunteer, recording.id)).reduce((sum, take) => sum + take.seconds, 0);
+      if (recording.status === "draft") drafts += seconds;
+      else waiting += seconds;
+    }
+    return json({
+      accepted_minutes: Math.round(mine.seconds / 0.6) / 100,
+      accepted_recordings: mine.recordings,
+      waiting_minutes: Math.round(waiting / 0.6) / 100,
+      draft_minutes: Math.round(drafts / 0.6) / 100,
+      all: await publicStats(env),
+    });
+  }
+
+  if (path === "/api/me/name" && method === "POST") {
+    const consent = await readJson(env, consentKey);
+    if (!consent) return error(403, "Choose a licence first.");
+    const name = cleanName(((await requestJson(request)) || {}).credit_name);
+    if (name === undefined) return error(400, "The name is too long (80 characters at most).");
+    if (!name && consent.licence === "CC-BY-4.0") return error(400, "CC BY needs a name to credit you by.");
+    const updated = { ...consent, credit_name: name || null, name_changed_at: new Date().toISOString() };
+    await writeJson(env, consentKey, updated);
+    return json(updated);
+  }
+
+  if (path === "/api/me/export" && method === "GET") {
+    const recordings = await Promise.all((await recordingsOf(env, volunteer)).map(async (recording) => ({
+      ...forVolunteer(recording),
+      takes: (await takesOf(env, volunteer, recording.id)).map((take) => ({
+        ...take, url: `/api/recordings/${recording.id}/takes/${take.id}`,
+      })),
+    })));
+    const micChecks = await Promise.all((await listAll(env, `mic-checks/${volunteer}/`)).map((o) => readJson(env, o.key)));
+    return new Response(JSON.stringify({
+      exported_at: new Date().toISOString(),
+      email,
+      consent: await readJson(env, consentKey),
+      recordings,
+      mic_checks: micChecks,
+    }, null, 2), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="quenya-voices-my-data.json"',
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (path === "/api/me" && method === "DELETE") {
+    if (((await requestJson(request)) || {}).confirm !== "delete") return error(400, "Confirm with the word delete.");
+    for (const prefix of [`volunteers/${volunteer}/`, `recordings/${volunteer}/`, `mic-checks/${volunteer}/`,
+      `queue/${volunteer}/`, `accepted/${volunteer}/`]) {
+      const keys = (await listAll(env, prefix)).map((object) => object.key);
+      for (let i = 0; i < keys.length; i += 1000) await env.TAKES.delete(keys.slice(i, i + 1000));
+    }
+    // No e-mail here: only the id, so copies already downloaded for training can be found and deleted.
+    await writeJson(env, `erasures/${volunteer}.json`, { volunteer, erased_at: new Date().toISOString() });
+    let invitation = "not configured";
+    if (invitesConfigured(env)) {
+      try {
+        await changeInvite(env, email, false);
+        invitation = "removed";
+      } catch (err) {
+        console.error(err);
+        invitation = "failed";
+      }
+    }
+    return json({ deleted: true, invitation });
   }
 
   if (path === "/api/mic-check" && method === "POST") {
     const result = (await requestJson(request)) || {};
     const stored = { checked_at: new Date().toISOString(), problems: result.problems, metrics: result.metrics };
     if (JSON.stringify(stored).length > 20000) return error(413, "Too large.");
-    await writeJson(env, `volunteers/${volunteer}/mic-checks/${stored.checked_at}.json`, stored);
+    await writeJson(env, `mic-checks/${volunteer}/${stored.checked_at}.json`, stored);
     return json({ stored: true }, 201);
+  }
+
+  if (path === "/api/admin/invites") {
+    if (!isAdmin(email, env)) return error(403, "Only admins can do this.");
+    if (!invitesConfigured(env)) return error(501, "Invitations are not set up: see README.md (CF_ACCOUNT_ID, ACCESS_GROUP_ID, CF_API_TOKEN).");
+    if (method === "GET") return json({ invites: await listInvites(env) });
+    if (method === "POST" || method === "DELETE") {
+      const target = ((await requestJson(request)) || {}).email;
+      if (!validEmail(target)) return error(400, "That is not an e-mail address.");
+      return json({ invites: await changeInvite(env, target, method === "POST") });
+    }
+    return error(405, "Method not allowed.");
   }
 
   if (path === "/api/recordings" && method === "GET") {
@@ -390,7 +533,7 @@ async function handleApi(request, env) {
   }
 
   if (path === "/api/recordings" && method === "POST") {
-    if (!(await readJson(env, consentKey))) return error(403, "Choose a licence before recording.");
+    if (!consentCurrent(await readJson(env, consentKey))) return error(403, "Accept the terms before recording.");
     const session = Number(((await requestJson(request)) || {}).session);
     const { sessions } = await loadScript(env);
     if (!sessions.has(session)) return error(400, "No such session in the script.");

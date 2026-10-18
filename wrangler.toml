@@ -7,6 +7,9 @@ main = "src/worker.js"
 compatibility_date = "2026-10-01"
 # keep the variables set in the dashboard when deploying
 keep_vars = true
+# Only the one address that Cloudflare Access protects: no per-version preview addresses.
+workers_dev = true
+preview_urls = false
 
 # The page reads the script (with a pronunciation column) from the static assets; build.py writes it.
 [build]
@@ -20,9 +23,16 @@ run_worker_first = ["/api/*"]
 [[r2_buckets]]
 binding = "TAKES"
 bucket_name = "quenya-recordings"
+# Stored in the EU (see the Privacy Notice); create the bucket with --jurisdiction eu.
+jurisdiction = "eu"
 
-# Not secret, but specific to your Cloudflare account: set them in the dashboard (Worker > Settings >
-# Variables) or uncomment and fill in here. Without them the API refuses everyone.
+# Not secret, but specific to your Cloudflare account: fill in here, or set them in the dashboard (Worker >
+# Settings > Variables and Secrets). Without ACCESS_TEAM_DOMAIN and ACCESS_AUD the API refuses everyone.
+# The API token for invitations is a secret: npx wrangler secret put CF_API_TOKEN (see README.md).
 # [vars]
 # ACCESS_TEAM_DOMAIN = "<your-team>.cloudflareaccess.com"
 # ACCESS_AUD = "<Application Audience (AUD) tag of the Access application>"
+# REVIEWERS = "you@example.org"            # comma-separated e-mails
+# ADMINS = "you@example.org"               # who can invite people
+# CF_ACCOUNT_ID = "<account id>"
+# ACCESS_GROUP_ID = "<id of the Access group with the invited e-mails>"

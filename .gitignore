@@ -2,3 +2,7 @@ node_modules/
 .wrangler/
 .dev.vars
 public/script.tsv
+public/privacy.html
+public/cookies.html
+public/terms.html
+public/stats.html
