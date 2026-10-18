@@ -11,3 +11,10 @@ path = [".github/pull_request_template.md", ".github/ISSUE_TEMPLATE/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
 SPDX-License-Identifier = "Apache-2.0"
+
+# JSON files cannot carry a comment header.
+[[annotations]]
+path = ["package.json", "package-lock.json", "site.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
+SPDX-License-Identifier = "Apache-2.0"
