@@ -79,17 +79,18 @@ SPDX-License-Identifier: Apache-2.0
         EU Standard Contractual Clauses.</li>
       <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
         but not your e-mail address.</li>
-      <li><b>Training services</b>: accepted recordings are copied to the computer that trains the model, either
-        one of the project's own or a GPU service used as our processor (currently Kaggle, by Google LLC, in a
-        private dataset). They are deleted there, or replaced, whenever a volunteer asks for erasure.</li>
+      <li><b>Training services</b>: for each training, accepted recordings are copied over HTTPS to the computer
+        that trains the model, a GPU service used as our processor (currently Kaggle, by Google LLC). The copy is
+        temporary: it is deleted when the training session ends and never saved there. Each training copies the
+        recordings again, so erased recordings are never in it.</li>
       <li><b>The public</b>: the trained models (with an artificial voice), audio made with them, and the name you
         want to be credited by. Never your recordings.</li>
     </ul>
 
     <h2>How we protect it</h2>
     <p>Your data is encrypted in transit (the site and every copy for training use HTTPS only) and at rest: Cloudflare
-      encrypts all stored recordings and their details, and copies for training are kept only on encrypted disks or
-      in private, encrypted storage of the training service. Only you, the reviewers (your submitted recordings) and
+      encrypts all stored recordings and their details, and the temporary copies for training are kept only on
+      encrypted disks. Only you, the reviewers (your submitted recordings) and
       the person running the training (accepted recordings) can reach your recordings.</p>
 
     <h2>Your rights</h2>
