@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Dependabot opens pull requests to keep Wrangler and the workflow actions up to date.
+# Security alerts and security updates are switched on in the repository settings.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
