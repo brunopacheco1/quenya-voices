@@ -49,6 +49,8 @@ function setup() {
     DEV_EMAIL: "ana@example.org",
     REVIEWERS: "Rev@Example.org, other@example.org",
     TAKES: new FakeBucket(),
+    mails: [],
+    sendMail: async (mail) => { env.mails.push(mail); },
     ASSETS: { fetch: async (request) => new URL(request.url).pathname === "/script.tsv"
       ? new Response(SCRIPT) : new Response("page") },
   };
@@ -237,7 +239,7 @@ test("my data: rename, export, and delete everything", async () => {
 
   assert.equal((await ana("/api/me", { method: "DELETE", json: {} })).status, 400);
   const deleted = await body(await ana("/api/me", { method: "DELETE", json: { confirm: "delete" } }));
-  assert.equal(deleted.invitation, "not configured");
+  assert.equal(deleted.invitation, "removed");
   const left = [...env.TAKES.objects.keys()];
   assert.equal(left.length, 1);
   assert.match(left[0], /^erasures\/[0-9a-f]{16}\.json$/);
@@ -271,26 +273,17 @@ test("an earlier consent to publish under CC BY must be renewed for training onl
   assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
 });
 
-test("admins manage invitations in the Access group", async (t) => {
+test("admins manage invitations", async () => {
   const { ana, env } = setup();
   env.ADMINS = "ana@example.org";
-  assert.equal((await ana("/api/admin/invites")).status, 501);
-  Object.assign(env, { CF_ACCOUNT_ID: "acc", ACCESS_GROUP_ID: "grp", CF_API_TOKEN: "token" });
-  let group = { name: "Volunteers", include: [{ email: { email: "ana@example.org" } }], exclude: [], require: [] };
-  const calls = [];
-  t.mock.method(globalThis, "fetch", async (url, init) => {
-    calls.push([init.method, url, init.headers.Authorization]);
-    if (init.method === "PUT") group = JSON.parse(init.body);
-    return new Response(JSON.stringify({ success: true, result: group }));
-  });
-  assert.deepEqual((await body(await ana("/api/admin/invites"))).invites, ["ana@example.org"]);
+  assert.deepEqual((await body(await ana("/api/admin/invites"))).invites, []);
   assert.equal((await ana("/api/admin/invites", { method: "POST", json: { email: "not an email" } })).status, 400);
   assert.deepEqual((await body(await ana("/api/admin/invites", { method: "POST", json: { email: " Bea@Example.org" } }))).invites,
-    ["ana@example.org", "bea@example.org"]);
+    ["bea@example.org"]);
+  assert.deepEqual((await body(await ana("/api/admin/invites", { method: "POST", json: { email: "cid@example.org" } }))).invites,
+    ["bea@example.org", "cid@example.org"]);
   assert.deepEqual((await body(await ana("/api/admin/invites", { method: "DELETE", json: { email: "bea@example.org" } }))).invites,
-    ["ana@example.org"]);
-  assert.equal(calls[0][1], "https://api.cloudflare.com/client/v4/accounts/acc/access/groups/grp");
-  assert.equal(calls[0][2], "Bearer token");
+    ["cid@example.org"]);
   env.ADMINS = "";
   assert.equal((await ana("/api/admin/invites")).status, 403);
 });

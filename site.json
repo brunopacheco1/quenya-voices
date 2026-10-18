@@ -1,5 +1,5 @@
 {
-  "_comment": "Who runs the site, shown in the Privacy Notice, Cookie Policy and Terms. build.py fills them in. Check every value before the first deploy.",
+  "_comment": "Who runs the site, shown in the Privacy Notice, Cookie Policy and Terms. build.py fills them in. Check every value before the first deploy. mail_provider: the company whose mail server sends the sign-in codes, with its country (for example \"Brevo (Sendinblue SAS, France)\").",
   "controller": "Bruno Pacheco",
   "controller_address": "Luxembourg",
   "website": "https://bruno.pacheco.lu",
@@ -7,6 +7,7 @@
   "country": "Luxembourg",
   "supervisory_authority": "Commission nationale pour la protection des données (CNPD)",
   "supervisory_authority_url": "https://cnpd.public.lu/",
+  "mail_provider": "",
   "project_url": "https://github.com/brunopacheco1/Quenya-TTS",
   "volunteers_issue_url": "https://github.com/brunopacheco1/ma-quetilye-quenya/issues/38",
   "minimum_training_minutes": 60,

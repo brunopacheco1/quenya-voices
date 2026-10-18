@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
 // SPDX-License-Identifier: Apache-2.0
 
-// API of the recording site. The page itself is static (public/); Cloudflare Access protects both.
+// API of the recording site. The page itself is static (public/); server.js serves both, on a Gcore machine in
+// Luxembourg. Only invited people can sign in, with a one-time code sent by e-mail (auth.js).
 //
 // A volunteer records one session of the script (100 lines) at a time as a "recording". While it is a draft
 // they can record, play back and redo any line. When they submit it, it is locked and waits for review; a
@@ -9,10 +10,10 @@
 // Reviewers (the e-mails in REVIEWERS) hear submitted recordings and either accept them or send named lines
 // back with a reason; only those lines open again for the volunteer (see public/lib/review.js).
 //
-// Storage (R2 bucket bound as TAKES):
+// Storage (env.TAKES: Gcore object storage in Luxembourg, every object encrypted by this server; see storage.js):
 //   volunteers/<volunteer>/consent.json                  the statements the volunteer accepted, and when
-//   mic-checks/<volunteer>/<time>.json                   results of each microphone check (an R2 lifecycle rule
-//                                                        deletes them after the time in the Privacy Notice)
+//   mic-checks/<volunteer>/<time>.json                   results of each microphone check (deleted after the
+//                                                        time in the Privacy Notice by removeOld below)
 //   recordings/<volunteer>/<recording>/recording.json   session, status (draft/submitted), dates
 //   recordings/<volunteer>/<recording>/<line id>.wav    the latest take of each line (a redo replaces it)
 //   reference/<line id>.wav                              TTS reading of a line for Listen (quenya_tts.volunteers)
@@ -20,10 +21,14 @@
 //   accepted/<volunteer>/<recording>                     marker: accepted, with its seconds of speech
 //   erasures/<volunteer>.json                            a volunteer deleted their account: drop their local copies
 //   stats/milestones.json                                when the accepted speech first reached the training minimum
-// <volunteer> is derived from the e-mail, so the e-mail itself appears only inside consent.json.
+//   config/invites.json, auth/...                         who is invited, sign-in codes and sessions (auth.js)
+// <volunteer> is derived from the e-mail, so the e-mail itself appears only inside encrypted objects.
 //
-// Public (no sign-in; the Access application must bypass /api/public/*, see README.md):
+// Public (no sign-in):
 //   GET  /api/public/stats                          accepted minutes, volunteers, minimum and earliest training date
+//   POST /api/auth/start                            {email}: e-mail a sign-in code, if the address is invited
+//   POST /api/auth/verify                           {email, code}: sign in (sets the session cookie)
+//   POST /api/auth/signout                          sign out
 // Volunteers:
 //   GET  /api/me                                    who is signed in, their consent (or null), the consent text
 //   GET  /api/me/contribution                       the volunteer's accepted, waiting and draft minutes
@@ -46,22 +51,22 @@
 //   GET  /api/review/<volunteer>/<recording>/takes/<line>   a take
 //   POST /api/review/<volunteer>/<recording>        {decision: "accept" | "redo", redo: {line: {reason, note}}}
 // Admins only (the e-mails in ADMINS):
-//   GET  /api/admin/invites                         invited e-mails (the Access group)
+//   GET  /api/admin/invites                         invited e-mails
 //   POST /api/admin/invites                         {email}: invite
 //   DELETE /api/admin/invites                       {email}: remove the invitation
 
-import { volunteerEmail } from "./access.js";
+import { removeExpired, signOut, startSignIn, verifySignIn, volunteerEmail } from "./auth.js";
 import site from "../site.json" with { type: "json" };
 import { CONSENT_VERSION, INTRO, STATEMENTS, cleanName, consentCurrent, consentRecord } from "./consent.js";
-import { changeInvite, invitesConfigured, listInvites, validEmail } from "./invites.js";
+import { changeInvite, listInvites, validEmail } from "./invites.js";
 import { decodeWav, readWavHeader, wavProblem } from "../public/lib/audio.js";
 import { LIMITS, peakAndClipped } from "../public/lib/quality.js";
 import { REASONS, checkReview } from "../public/lib/review.js";
 import { LINE_ID, parseScript, sessionOf } from "../public/lib/script.js";
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
-// The server checks again only what is cheap and certain (empty, too long, clipped, silent): the free Workers
-// plan allows 10 ms of CPU per request. The page runs all checks (quality.js) and sends its warning codes.
+// The server checks again only what is cheap and certain (empty, too long, clipped, silent). The page runs all
+// checks (quality.js) and sends its warning codes.
 const CHECK_CODE = /^[a-z_]{1,20}$/;
 const RECORDING_ID = /^r[0-9a-z]{6,20}$/;
 const VOLUNTEER_ID = /^[0-9a-f]{16}$/;
@@ -397,12 +402,28 @@ async function updateMilestones(env) {
   }
 }
 
+function withCookie(result) {
+  const response = json(result.body, result.status);
+  if (result.cookie) response.headers.set("Set-Cookie", result.cookie);
+  return response;
+}
+
 async function handleApi(request, env) {
-  if (new URL(request.url).pathname === "/api/public/stats" && request.method === "GET") {
+  const { pathname } = new URL(request.url);
+  if (pathname === "/api/public/stats" && request.method === "GET") {
     return json(await publicStats(env));
   }
+  if (request.method === "POST" && pathname === "/api/auth/start") {
+    return withCookie(await startSignIn(env, await requestJson(request)));
+  }
+  if (request.method === "POST" && pathname === "/api/auth/verify") {
+    return withCookie(await verifySignIn(env, await requestJson(request), request));
+  }
+  if (request.method === "POST" && pathname === "/api/auth/signout") {
+    return withCookie(await signOut(env, request));
+  }
   const email = await volunteerEmail(request, env);
-  if (!email) return error(401, "Not signed in. Open the site from your invitation link.");
+  if (!email) return error(401, "Not signed in.");
   const volunteer = await volunteerId(email);
   const path = new URL(request.url).pathname;
   const method = request.method;
@@ -492,17 +513,9 @@ async function handleApi(request, env) {
     }
     // No e-mail here: only the id, so copies already downloaded for training can be found and deleted.
     await writeJson(env, `erasures/${volunteer}.json`, { volunteer, erased_at: new Date().toISOString() });
-    let invitation = "not configured";
-    if (invitesConfigured(env)) {
-      try {
-        await changeInvite(env, email, false);
-        invitation = "removed";
-      } catch (err) {
-        console.error(err);
-        invitation = "failed";
-      }
-    }
-    return json({ deleted: true, invitation });
+    // Removing the invitation also ends every session of this address (auth.js checks it on each request).
+    await changeInvite(env, email, false);
+    return withCookie({ ...(await signOut(env, request)), body: { deleted: true, invitation: "removed" } });
   }
 
   if (path === "/api/mic-check" && method === "POST") {
@@ -515,7 +528,6 @@ async function handleApi(request, env) {
 
   if (path === "/api/admin/invites") {
     if (!isAdmin(email, env)) return error(403, "Only admins can do this.");
-    if (!invitesConfigured(env)) return error(501, "Invitations are not set up: see README.md (CF_ACCOUNT_ID, ACCESS_GROUP_ID, CF_API_TOKEN).");
     if (method === "GET") return json({ invites: await listInvites(env) });
     if (method === "POST" || method === "DELETE") {
       const target = ((await requestJson(request)) || {}).email;
@@ -577,8 +589,20 @@ async function handleApi(request, env) {
   return error(404, "Not found.");
 }
 
-// Browsers keep to HTTPS for a year after their first visit; the static pages get the same header from
-// public/_headers. Local development (wrangler dev) runs on plain http://localhost.
+// Deletes what the Privacy Notice says is kept only for a while: microphone checks after
+// mic_check_retention_months, and expired sign-in codes and sessions. server.js runs it every day.
+export async function removeOld(env, now = Date.now()) {
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - site.mic_check_retention_months);
+  const old = (await listAll(env, "mic-checks/")).map((object) => object.key)
+    .filter((key) => Date.parse(key.split("/").pop().replace(/\.json$/, "")) < cutoff.getTime());
+  for (let i = 0; i < old.length; i += 1000) await env.TAKES.delete(old.slice(i, i + 1000));
+  await removeExpired(env, now);
+  return old.length;
+}
+
+// Browsers keep to HTTPS for a year after their first visit; Caddy (deploy/Caddyfile) sends the same header for
+// the static pages. Local development (npm run dev) runs on plain http://localhost.
 const HSTS = "max-age=31536000";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

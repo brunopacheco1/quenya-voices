@@ -19,6 +19,7 @@ SPDX-License-Identifier: Apache-2.0
       <button id="nav-home" type="button" class="link">Your recordings</button>
       <button id="nav-account" type="button" class="link">My data</button>
       <button id="nav-invites" type="button" class="link" hidden>Invitations</button>
+      <button id="nav-signout" type="button" class="link">Sign out</button>
     </nav>
   </header>
 
@@ -28,8 +29,26 @@ SPDX-License-Identifier: Apache-2.0
 
     <section id="signed-out" hidden>
       <h2>Please sign in</h2>
-      <p id="signed-out-text">This site is open to invited volunteers. Open it from the link in your invitation and
-        sign in with the e-mail address it was sent to.</p>
+      <p id="signed-out-text">This site is open to invited volunteers. Sign in with the e-mail address your
+        invitation was sent to: we e-mail you a one-time code.</p>
+      <form id="signin-email">
+        <p>
+          <label for="signin-address">E-mail address</label>
+          <input id="signin-address" type="email" autocomplete="email" required maxlength="254">
+        </p>
+        <button type="submit" class="primary">Send me a code</button>
+      </form>
+      <form id="signin-code" hidden>
+        <p id="signin-sent"></p>
+        <p>
+          <label for="signin-number">Code</label>
+          <input id="signin-number" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" required
+            maxlength="7">
+        </p>
+        <button type="submit" class="primary">Sign in</button>
+        <button id="signin-again" type="button" class="link">Use another address or send a new code</button>
+      </form>
+      <p id="signin-error" class="warning" role="alert"></p>
     </section>
 
     <form id="consent" hidden>

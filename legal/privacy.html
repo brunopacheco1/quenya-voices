@@ -47,9 +47,10 @@ SPDX-License-Identifier: Apache-2.0
             <td>{{mic_check_retention_months}} months.</td></tr>
           <tr><td>Review notes on your lines</td><td>To tell you what to record again.</td><td>Your consent
             (art. 6(1)(a)).</td><td>As long as the recording they belong to.</td></tr>
-          <tr><td>Sign-in records (e-mail, time, IP address, browser) kept by Cloudflare Access</td><td>Security of
-            the site.</td><td>Legitimate interest in keeping the site secure (art. 6(1)(f)).</td>
-            <td>As long as Cloudflare keeps Access logs for this account.</td></tr>
+          <tr><td>Sign-in codes and sessions (your e-mail address, when you signed in; only scrambled forms of
+            the codes and session keys are kept)</td><td>To let you sign in, and limit how many codes are sent.</td>
+            <td>Legitimate interest in keeping the site secure (art. 6(1)(f)).</td>
+            <td>Codes: one hour. Sessions: until you sign out, or 30 days.</td></tr>
         </tbody>
       </table>
     </div>
@@ -73,14 +74,14 @@ SPDX-License-Identifier: Apache-2.0
 
     <h2>Who receives your data</h2>
     <ul>
-      <li><b>Cloudflare, Inc.</b> hosts the site, the sign-in (Cloudflare Access) and the storage (R2), as our
-        processor under its Data Processing Addendum. Recordings are stored in Cloudflare's EU jurisdiction. Cloudflare
-        is a US company; transfers it may make outside the EU are covered by the EU-US Data Privacy Framework and the
-        EU Standard Contractual Clauses.</li>
+      <li><b>Gcore</b>, a Luxembourg company, hosts the site and stores your data in its data centres in the
+        European Union, as our processor under its data processing agreement. Everything is encrypted by the site
+        before it is stored, so Gcore cannot read your recordings or your details.</li>
+      <li><b>{{mail_provider}}</b> sends the e-mails with your sign-in codes, as our processor. It receives your
+        e-mail address and the code, nothing else.</li>
       <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
         but not your e-mail address.</li>
-      <li><b>Gcore</b>, a Luxembourg company, provides the GPU machine that trains the model, as our processor
-        under its data processing agreement. For each training, accepted recordings are copied over HTTPS to a
+      <li><b>Gcore</b> also provides the GPU machine that trains the model. For each training, accepted recordings are copied over HTTPS to a
         machine created for that training alone, in one of Gcore's data centres in the European Union, and deleted
         with it, disk included, when the training ends (at the latest after a few hours). Each training copies the recordings
         again, so erased recordings are never in it.</li>
@@ -89,9 +90,10 @@ SPDX-License-Identifier: Apache-2.0
     </ul>
 
     <h2>How we protect it</h2>
-    <p>Your data is encrypted in transit (the site and every copy for training use HTTPS only) and at rest: Cloudflare
-      encrypts all stored recordings and their details, and the temporary copies for training are kept only on
-      encrypted disks. Only you, the reviewers (your submitted recordings) and
+    <p>Your data stays in the European Union and is encrypted in transit (the site and every copy for training use
+      HTTPS only) and at rest: the site encrypts every recording and every detail about you (AES-256) before storing
+      it, with a key that only the site and the training have. Copies for training are temporary and deleted with
+      the training machine. The site keeps no visitor logs. Only you, the reviewers (your submitted recordings) and
       the person running the training (accepted recordings) can reach your recordings.</p>
 
     <h2>Your rights</h2>

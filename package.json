@@ -4,15 +4,17 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "build": "python3 build.py",
+    "dev": "python3 build.py && node --env-file-if-exists=.env server.js",
+    "start": "node server.js",
     "pretest": "python3 build.py",
     "test": "node --test test/*.test.js"
   },
-  "devDependencies": {
-    "wrangler": "^4.151.1"
-  },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20",
+    "nodemailer": "^10.1.7"
   }
 }

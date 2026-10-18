@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=Quenya Voices (recording site)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=quenya
+Group=quenya
+WorkingDirectory=/opt/quenya-voices
+EnvironmentFile=/etc/quenya-voices.env
+Environment=NODE_ENV=production HOST=127.0.0.1 PORT=8787
+ExecStart=/usr/local/bin/node server.js
+Restart=on-failure
+RestartSec=5
+# The server needs no disk of its own: everything is in the object storage.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

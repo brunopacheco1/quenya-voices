@@ -66,7 +66,7 @@ async function api(path, options = {}) {
     throw new Error("no connection, or your sign-in has expired: reload the page");
   }
   if (response.status === 401) {
-    show("signed-out");
+    showSignIn();
     throw new SignedOut();
   }
   return response;
@@ -205,6 +205,11 @@ class App {
     $("nav-account").onclick = () => this.state === "idle" && this.account();
     $("nav-invites").onclick = () => this.state === "idle" && this.invites();
     $("nav-invites").hidden = !this.me.admin;
+    $("nav-signout").onclick = async () => {
+      if (this.state !== "idle") return;
+      await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" });
+      location.reload();
+    };
     $("nav").hidden = false;
     $("account-name-form").onsubmit = (event) => this.saveName(event);
     $("account-zip").onclick = () => this.downloadRecordings();
@@ -762,6 +767,7 @@ class App {
     show("signed-out");
     $("signed-out").querySelector("h2").textContent = "Your account was deleted";
     $("signed-out-text").textContent = "Your consent and all your recordings were deleted. Thank you for your time.";
+    $("signin-email").hidden = true;
   }
 
   // -- invitations (admins) --
@@ -871,6 +877,42 @@ class App {
   }
 }
 
+// ---- sign-in ----
+
+// The sign-in form: an e-mail address, then the one-time code e-mailed to it.
+function showSignIn() {
+  $("nav").hidden = true;
+  $("who").textContent = "";
+  const post = (path, body) => fetch(path, {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const failed = async (response) => {
+    $("signin-error").textContent = response.ok ? "" : await errorText(response);
+    return !response.ok;
+  };
+  $("signin-email").onsubmit = async (event) => {
+    event.preventDefault();
+    const email = $("signin-address").value.trim();
+    if (await failed(await post("/api/auth/start", { email }))) return;
+    $("signin-sent").textContent = `If ${email} is invited, a 6-digit code is on its way to it. It works for 15 minutes.`;
+    $("signin-email").hidden = true;
+    $("signin-code").hidden = false;
+    $("signin-number").value = "";
+    $("signin-number").focus();
+  };
+  $("signin-code").onsubmit = async (event) => {
+    event.preventDefault();
+    const response = await post("/api/auth/verify", { email: $("signin-address").value.trim(), code: $("signin-number").value });
+    if (!(await failed(response))) location.reload();
+  };
+  $("signin-again").onclick = () => {
+    $("signin-code").hidden = true;
+    $("signin-email").hidden = false;
+    $("signin-error").textContent = "";
+  };
+  show("signed-out");
+}
+
 // ---- consent ----
 
 function showWho(me) {
@@ -922,6 +964,7 @@ async function main() {
   } catch (err) {
     if (err instanceof SignedOut) return;
     show("signed-out");
+    $("signin-email").hidden = true;
     $("signed-out-text").textContent = `The site could not load (${err.message}). Please try again later.`;
   }
 }

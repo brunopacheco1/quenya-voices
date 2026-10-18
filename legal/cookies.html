@@ -24,13 +24,9 @@ SPDX-License-Identifier: Apache-2.0
       <table>
         <thead><tr><th scope="col">Name</th><th scope="col">Set by</th><th scope="col">What for</th><th scope="col">How long</th></tr></thead>
         <tbody>
-          <tr><td><code>CF_Authorization</code></td><td>Cloudflare Access</td><td>Keeps you signed in, so only
-            invited volunteers reach the site and you only see your own recordings.</td><td>Until the sign-in
-            session ends (set by the site, at most one month).</td></tr>
-          <tr><td>Sign-in page cookies (on <code>…cloudflareaccess.com</code>)</td><td>Cloudflare Access</td>
-            <td>Needed to complete the sign-in with the one-time code.</td><td>The sign-in session.</td></tr>
-          <tr><td><code>__cf_bm</code> (only if Cloudflare's bot protection is on)</td><td>Cloudflare</td>
-            <td>Tells people from bots, to protect the site.</td><td>30 minutes.</td></tr>
+          <tr><td><code>qv_session</code></td><td>This site</td><td>Keeps you signed in after you entered the code
+            we e-mailed you, so only invited volunteers reach the site and you only see your own recordings. It holds
+            a random key, nothing about you.</td><td>Until you sign out, or 30 days.</td></tr>
           <tr><td><code>autoNext</code> (browser storage, not a cookie)</td><td>This site</td><td>Remembers whether you
             want to go to the next line after a good take.</td><td>Until you clear your browser's site data.</td></tr>
         </tbody>

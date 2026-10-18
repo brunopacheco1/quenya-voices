@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+# Caddy gets and renews the HTTPS certificate (Let's Encrypt) by itself, redirects http:// to https://, and passes
+# requests to the Node server. setup.sh replaces SITE_DOMAIN with the site's address.
+SITE_DOMAIN {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "microphone=(self), camera=(), geolocation=()"
+		-Server
+	}
+	request_body {
+		max_size 13MB
+	}
+	reverse_proxy 127.0.0.1:8787
+	log {
+		# no IP addresses or e-mails in the logs: only what failed
+		output discard
+	}
+}

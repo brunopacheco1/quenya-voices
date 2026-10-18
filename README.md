@@ -11,8 +11,8 @@ with nothing to install. The recordings train open Quenya text-to-speech voices 
 [Quenya-TTS](https://github.com/brunopacheco1/Quenya-TTS) and give audio to the community book
 [*Ma Quetilyë Quenya?*](https://github.com/brunopacheco1/ma-quetilye-quenya).
 
-It runs on Cloudflare: a Worker serves the page and its API, Cloudflare Access handles invitations and sign-in,
-and R2 stores the recordings in the EU.
+It runs on Gcore, in Luxembourg: a small Node.js server behind Caddy serves the page and its API, and Gcore's
+object storage keeps the recordings, encrypted by the server before they are stored.
 
 ## Want to record?
 
@@ -29,8 +29,8 @@ Recording is by invitation. Say hello in the book's
 
 ### What it does
 
-- **Sign-in by invitation.** Only invited e-mail addresses get in. Admins invite people on the site's
-  *Invitations* page, or in the Cloudflare dashboard.
+- **Sign-in by invitation.** Only invited e-mail addresses get in, with a one-time code the site e-mails them.
+  Admins invite people on the site's *Invitations* page; removing an invitation signs that person out.
 - **Consent first.** Recordings are used only to train open voices and are never published; volunteers can
   download their own and publish them themselves. Before recording, volunteers confirm they are 18 or older, that a
   trained model may still sound somewhat like them, and accept the
@@ -56,7 +56,7 @@ Recording is by invitation. Say hello in the book's
   [progress page](legal/stats.html) shows the total accepted minutes against the training minimum, and the earliest
   first-training date.
 - **GDPR self-service** under *My data*: download everything as JSON, download all recordings as a ZIP, correct
-  the credited name, and delete the account. Deleting removes everything from the bucket and ends the
+  the credited name, and delete the account. Deleting removes everything from the storage and ends the
   invitation. It also leaves a marker without the e-mail address, so that Quenya-TTS's `quenya_tts.volunteers download` deletes
   local copies too.
 
@@ -65,108 +65,69 @@ until all accepted speech together reaches `minimum_training_minutes` (60 by def
 training then waits `training_wait_days` more (30). `python -m quenya_tts.volunteers download --for-training`
 refuses to run before then.
 
-### Free plan limits
+### What it costs
 
-R2 checked on 2026-10-18 on Cloudflare's pricing page; the Access and Workers numbers are from Cloudflare's plan pages, so check them again before relying on them:
+Prices from Gcore's pricing pages on 2026-10-18; check them again before relying on them.
 
-| Service | Free allowance | What it means here |
+| Part | Price | Here |
 |---|---|---|
-| R2 storage | 10 GB-month, 1 million writes and 10 million reads a month, no egress fees | 48 kHz 16-bit mono WAV is about 345 MB per hour of speech, so about 29 hours fit |
-| Zero Trust (Access) | up to 50 users | 50 volunteers, reviewers and admins together |
-| Workers | 100,000 requests a day, 10 ms CPU per request | the server only checks takes cheaply; the page does the heavy checks |
-
-Activating R2 (and sometimes Zero Trust) asks for a payment method even on the free plan. Nothing is charged
-while you stay within the allowances above.
+| Virtual machine (1 vCPU, 2 GB, Luxembourg) | about €2–5 a month with its disk and IP | runs the site |
+| Object storage, S3 Standard Luxembourg-2 | €0.04 per GB a month, €0.03 per 10,000 requests, €0.02 per GB downloaded | 48 kHz 16-bit mono WAV is about 345 MB per hour of speech: 30 hours cost about €0.40 a month |
+| Sign-in e-mails | your mailbox's SMTP | a few e-mails per volunteer |
 
 ### Setting it up (once)
 
-You need a Cloudflare account, Node.js 22 or newer (Wrangler needs it), and Python 3 for the build step. From a clone of this
-repository:
+You need a Gcore account, a mailbox that can send through SMTP, and a domain name (for example
+`voices.tolkien.lu`).
 
-```
-npm install
-npx wrangler login
-```
-
-1. **Bucket**, in the EU:
-
-   ```
-   npx wrangler r2 bucket create quenya-recordings --jurisdiction eu
-   ```
-
-   In the dashboard (R2 → quenya-recordings → Settings → Object lifecycle rules), add a rule that deletes
-   objects with the prefix `mic-checks/` after 365 days. That matches `mic_check_retention_months` in `site.json`.
-
-2. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are
-   a careful draft, not legal advice. `build.py` fills them in on every deploy.
-
-3. **Deploy**:
+1. **Storage**: in Gcore, *Cloud → Object Storage → Create storage*, type S3, location **Luxembourg-2**. Create a
+   bucket `quenya-recordings` in it, keep it private, and note the access key and secret key.
+2. **Machine**: *Cloud → Virtual Instances → Create*, region **Luxembourg**, Ubuntu 24.04, the smallest shared
+   flavor (1 vCPU, 2 GB), a public IP, and your SSH key. In its security group, allow ports 80 and 443 from
+   everywhere, and 22 from your own address only.
+3. **DNS**: an `A` record from the site's address to the machine's IP (for `tolkien.lu`, at dns.lu).
+4. **Install**: on the machine,
 
    ```
-   npx wrangler deploy
+   curl -fsSLO https://raw.githubusercontent.com/brunopacheco1/quenya-voices/main/deploy/setup.sh
+   sudo bash setup.sh voices.tolkien.lu
    ```
 
-   It prints the address, `https://quenya-voices.<your-subdomain>.workers.dev`. Until step 4 is done, the API
-   refuses everyone.
+   It installs Node.js, Caddy and the site, and starts them. Caddy gets the HTTPS certificate by itself.
+5. **Settings**: fill in `/etc/quenya-voices.env` (`sudo nano /etc/quenya-voices.env`; the template explains
+   each line), then `sudo systemctl restart quenya-voices`. Make the encryption key with
+   `openssl rand -base64 32` and keep a copy in your password manager: without it nobody can read the recordings,
+   not even for training.
+6. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are a
+   careful draft, not legal advice.
 
-4. **Access** (Zero Trust in the dashboard; choose a team name and the Free plan the first time):
-   1. *Settings → Authentication*: make sure **One-time PIN** is enabled.
-   2. *Access → Access groups → Add a group*, named for example *Quenya volunteers*. Under *Include*, add
-      *Emails* with your own address. Copy the group's id from its URL.
-   3. *Access → Applications → Add an application → Self-hosted*: name it *Quenya Voices* and set the domain to
-      the workers.dev address. Add a policy *Allow* that includes the group. Set the session duration to
-      1 month, as the Cookie Policy says. After saving, copy the **Application Audience (AUD) tag** from its
-      overview.
-   4. Add a second self-hosted application, *Quenya Voices public pages*, on the same domain with these paths:
-      `privacy`, `privacy.html`, `cookies`, `cookies.html`, `terms`, `terms.html`, `stats`, `stats.html`,
-      `stats.js`, `style.css` and `api/public/stats`. Give it a policy with the action **Bypass** and include
-      *Everyone*. That way the legal pages and the progress page open without signing in.
+Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.tolkien.lu` pulls the latest code and
+restarts the site; the settings stay. Logs: `journalctl -u quenya-voices`.
 
-5. **Variables**: uncomment `[vars]` in `wrangler.toml` and fill them in, or set them in the dashboard (Worker →
-   Settings → Variables and Secrets):
-
-   | Name | Value |
-   |---|---|
-   | `ACCESS_TEAM_DOMAIN` | `<team>.cloudflareaccess.com` |
-   | `ACCESS_AUD` | the AUD tag from step 4.3 |
-   | `REVIEWERS` | comma-separated e-mails of reviewers |
-   | `ADMINS` | comma-separated e-mails of people who can invite |
-   | `CF_ACCOUNT_ID` | your account id (dashboard → Workers & Pages, right column) |
-   | `ACCESS_GROUP_ID` | the group id from step 4.2 |
-
-   For the *Invitations* page, create an API token (My Profile → API Tokens → Create custom token). Give it the
-   permission *Account → Access: Organizations, Identity Providers, and Groups → Edit*, for this account only.
-   Store it as a secret, never in a file:
-
-   ```
-   npx wrangler secret put CF_API_TOKEN
-   ```
-
-   Then `npx wrangler deploy` again.
-
-The Worker checks the Access token itself, so the API stays closed even if the Access application is switched
-off by mistake.
+The machine keeps no data of its own (everything is in the object storage), so it needs no backups: a new machine
+with the same settings is the same site. Microphone checks older than `mic_check_retention_months` and expired
+sign-in codes and sessions are deleted every day.
 
 ### Running it
 
-- **Invite**: *Invitations* on the site (admins), then send the invitation text it shows. The site sends no e-mails.
+- **Invite**: *Invitations* on the site (admins), then send the invitation text it shows. The site itself
+  only sends sign-in codes.
 The commands with `python -m quenya_tts` run in a [Quenya-TTS](https://github.com/brunopacheco1/Quenya-TTS)
 checkout, inside its `.venv`.
 
 - **Listen button**: generate and upload computer readings, one session at a time, on a machine with the reader:
-  `python -m quenya_tts.volunteers references --session 1 -o ~/references --upload`. This needs the R2 API
-  credentials below.
-- **Training data**: create an R2 API token (R2 → Manage API tokens, *Object Read only*, this bucket only),
-  then run:
+  `python -m quenya_tts.volunteers references --session 1 -o ~/references --upload`. This needs the storage
+  settings below.
+- **Training data**: the storage settings from `/etc/quenya-voices.env`, then:
 
   ```
-  export R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=...
+  export STORAGE_ENDPOINT=... STORAGE_REGION=... STORAGE_ACCESS_KEY_ID=... STORAGE_SECRET_ACCESS_KEY=... STORAGE_KEY=...
   python -m quenya_tts.volunteers download -o ~/volunteers --for-training
   ```
 
   It prints a `prepare_corpus` command for each accepted recording. Run the download before every training,
   because it also deletes the local copies of volunteers who asked for erasure. Treat that folder as the only
-  copy outside Cloudflare: any other backup must be refreshed the same way, to keep the erasure promise.
+  copy outside the storage: any other backup must be refreshed the same way, to keep the erasure promise.
 
   The recommended way is `python -m quenya_tts.gcore train` in Quenya-TTS: it creates a Gcore GPU machine in the
   EU for one training, fetches the recordings there with this token, and deletes the machine afterwards.
@@ -179,16 +140,18 @@ checkout, inside its `.venv`.
 ### Developing
 
 ```
-cp .dev.vars.example .dev.vars   # signs you in as DEV_EMAIL on localhost only
-npm run dev                      # http://localhost:8787, with a local bucket
-npm test                         # unit tests of the checks, the reviews and the API
+cp .env.example .env   # add a STORAGE_KEY; DEV_EMAIL signs you in on localhost without a code
+npm install
+npm run dev            # http://localhost:8787; recordings go to .data/, encrypted
+npm test               # unit tests of the checks, the reviews, the sign-in, the storage and the API
 ```
 
-Add `REVIEWERS` and `ADMINS` with the same address to `.dev.vars` to try the review and invitation pages.
+Empty `DEV_EMAIL` to try the sign-in itself: the codes are printed in the terminal instead of e-mailed.
 
-Layout: `public/` is the page (`app.js`; `lib/` is shared with the Worker: script parsing, WAV encoding, quality
-checks, review rules, ZIP). `src/` is the Worker (`worker.js` API, `access.js` sign-in check, `consent.js`,
-`invites.js`). `legal/` holds the legal pages and the progress page. `build.py` writes `public/script.tsv`
+Layout: `public/` is the page (`app.js`; `lib/` is shared with the server: script parsing, WAV encoding, quality
+checks, review rules, ZIP). `server.js` serves it and the API; `src/` holds the API (`worker.js`), sign-in
+(`auth.js`, `invites.js`, `mail.js`), storage and encryption (`storage.js`) and the consent text (`consent.js`).
+`deploy/` has the machine's setup. `legal/` holds the legal pages and the progress page. `build.py` writes `public/script.tsv`
 (with IPA) and the filled-in legal pages.
 
 #### The recording script
