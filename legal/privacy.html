@@ -1,0 +1,113 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+SPDX-License-Identifier: Apache-2.0
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Notice · Quenya Voices</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <p><a href="./">Quenya Voices</a></p>
+    <h1>Privacy Notice</h1>
+    <p class="muted">Last updated {{last_updated}}</p>
+  </header>
+  <main class="legal">
+    <p>Quenya Voices is a website where invited volunteers record themselves reading Quenya, to build an open
+      collection of recordings and an open text-to-speech voice for Quenya. This notice explains what personal
+      data the site handles, why, and your rights under the EU General Data Protection Regulation (GDPR).</p>
+
+    <h2>Who is responsible</h2>
+    <p>The controller is {{controller}}, {{controller_address}} ({{website}}). Contact for anything about your
+      data: <a href="mailto:{{contact_email}}">{{contact_email}}</a>.</p>
+
+    <h2>What data, why, and on what legal basis</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Data</th><th scope="col">Why</th><th scope="col">Legal basis</th><th scope="col">How long</th></tr></thead>
+        <tbody>
+          <tr><td>Your e-mail address</td><td>To invite you, let you sign in, and contact you about your recordings.
+            It is never published and reviewers do not see it.</td><td>Your consent (GDPR art. 6(1)(a)); before you
+            accept, our legitimate interest in sending the invitation you asked for (art. 6(1)(f)).</td>
+            <td>Until you delete your account or ask us to.</td></tr>
+          <tr><td>Your voice recordings</td><td>To review them and train open speech models (for example for the
+            audio of the book <i>Ma Quetilyë Quenya?</i>), and, only if you chose so, to publish them as open data.</td>
+            <td>Your consent (art. 6(1)(a)).</td><td>Drafts: until you delete them. Submitted and accepted recordings:
+            until you withdraw your consent.</td></tr>
+          <tr><td>How you chose to share your recordings, the name you want to be credited by (optional unless you
+            publish under CC BY), and the date and wording of your consent</td><td>To use your recordings as you
+            chose, credit you, and show that you agreed.</td><td>Your consent (art. 6(1)(a)); keeping proof of it is a legal obligation (art. 6(1)(c),
+            art. 7(1)).</td><td>As long as we keep your recordings, and the proof of consent for as long as
+            published copies may exist.</td></tr>
+          <tr><td>Microphone check results (noise level and similar numbers, no audio)</td><td>To help you and the
+            reviewers judge recording quality.</td><td>Your consent (art. 6(1)(a)).</td>
+            <td>{{mic_check_retention_months}} months.</td></tr>
+          <tr><td>Review notes on your lines</td><td>To tell you what to record again.</td><td>Your consent
+            (art. 6(1)(a)).</td><td>As long as the recording they belong to.</td></tr>
+          <tr><td>Sign-in records (e-mail, time, IP address, browser) kept by Cloudflare Access</td><td>Security of
+            the site.</td><td>Legitimate interest in keeping the site secure (art. 6(1)(f)).</td>
+            <td>As long as Cloudflare keeps Access logs for this account.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h2>When recordings are used for training</h2>
+    <p>Recordings are used to train a speech model only if you gave your consent to it (when you accepted the
+      licence) and a reviewer accepted them, and only once the accepted recordings of all volunteers together
+      reach {{minimum_training_minutes}} minutes of speech. The first training starts no earlier than
+      {{training_wait_days}} days after that minimum is reached, so everyone has time to check their data or ask for
+      erasure. Later trainings start whenever needed. The current totals are public on the
+      <a href="stats.html">progress page</a>.</p>
+
+    <p>We do not use your voice to identify you, we do not profile you, and we make no automated decisions that
+      affect you. The automatic checks on each take only ask you to record it again when it is clipped, silent or
+      empty. We collect no special categories of data and no data about anyone else.</p>
+
+    <h2>Who receives your data</h2>
+    <ul>
+      <li><b>Cloudflare, Inc.</b> hosts the site, the sign-in (Cloudflare Access) and the storage (R2), as our
+        processor under its Data Processing Addendum. Recordings are stored in Cloudflare's EU jurisdiction. Cloudflare
+        is a US company; transfers it may make outside the EU are covered by the EU-US Data Privacy Framework and the
+        EU Standard Contractual Clauses.</li>
+      <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
+        but not your e-mail address.</li>
+      <li><b>The public</b>: the trained models, and the name you want to be credited by. Your recordings
+        themselves only if you chose to publish them under CC BY 4.0; then anyone may copy and use them under that
+        licence. Note that a model trained on your voice can produce speech that sounds like you.</li>
+    </ul>
+
+    <h2>Your rights</h2>
+    <p>You can, at any time and free of charge:</p>
+    <ul>
+      <li><b>see and download</b> all your data at any time: <i>My data</i> on the site gives you all of it, and you can download
+        your recordings (access and portability, art. 15 and 20);</li>
+      <li><b>correct</b> the name you are credited by: <i>My data</i> (rectification, art. 16);</li>
+      <li><b>withdraw your consent and have your data erased</b>, at any time: <i>My data</i> → <i>Delete my
+        account</i>, or by writing to us (art. 7(3) and 17). We then delete your data from our storage and our
+        backups and leave it out of every future training and release. Erasure cannot reach what was already done
+        with your consent before: models already trained on your recordings, and, if you chose to publish your
+        recordings under CC BY, copies that others made of them;</li>
+      <li><b>restrict or object</b> to processing, by writing to us (art. 18 and 21).</li>
+    </ul>
+    <p>For anything else, write to <a href="mailto:{{contact_email}}">{{contact_email}}</a>. We answer within one
+      month. You can also complain to a data protection authority, in Luxembourg the
+      <a href="{{supervisory_authority_url}}">{{supervisory_authority}}</a>, or the one where you live or work.</p>
+
+    <h2>Age</h2>
+    <p>The site is only for people aged 18 or over.</p>
+
+    <h2>Cookies</h2>
+    <p>The site uses only the cookies needed to sign you in, and no tracking. See the
+      <a href="cookies.html">Cookie Policy</a>.</p>
+
+    <h2>Changes</h2>
+    <p>If this notice changes, the date above changes, and we tell you on the site before you record again.
+      For changes that need new consent, we ask for it.</p>
+  </main>
+  <footer class="legal-links"><a href="privacy.html">Privacy Notice</a> · <a href="cookies.html">Cookie Policy</a> ·
+    <a href="terms.html">Terms and Conditions</a> · <a href="stats.html">Progress</a></footer>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+# Copy to .dev.vars for `npm run dev`. Signs you in as this address on localhost only.
+DEV_EMAIL=you@example.com
