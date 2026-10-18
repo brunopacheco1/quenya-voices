@@ -386,11 +386,16 @@ async function publicStats(env) {
   };
 }
 
-// Records the first time the accepted speech reaches the training minimum (the waiting month starts then).
+// Records the first time the accepted speech reaches the training minimum (the waiting month starts then), with
+// the rules in force, which Quenya-TTS's quenya_tts.volunteers checks before any training.
 async function updateMilestones(env) {
   const stats = await publicStats(env);
   if (!stats.minimum_reached_at && stats.accepted_minutes >= stats.minimum_minutes) {
-    await writeJson(env, "stats/milestones.json", { minimum_reached_at: new Date().toISOString(), minimum_minutes: stats.minimum_minutes });
+    await writeJson(env, "stats/milestones.json", {
+      minimum_reached_at: new Date().toISOString(),
+      minimum_minutes: stats.minimum_minutes,
+      training_wait_days: stats.training_wait_days,
+    });
   }
 }
 
