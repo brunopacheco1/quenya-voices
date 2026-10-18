@@ -19,6 +19,7 @@ SPDX-License-Identifier: Apache-2.0
       <button id="nav-home" type="button" class="link">Your recordings</button>
       <button id="nav-account" type="button" class="link">My data</button>
       <button id="nav-invites" type="button" class="link" hidden>Invitations</button>
+      <button id="nav-signout" type="button" class="link">Sign out</button>
     </nav>
   </header>
 
@@ -28,19 +29,33 @@ SPDX-License-Identifier: Apache-2.0
 
     <section id="signed-out" hidden>
       <h2>Please sign in</h2>
-      <p id="signed-out-text">This site is open to invited volunteers. Open it from the link in your invitation and
-        sign in with the e-mail address it was sent to.</p>
+      <p id="signed-out-text">This site is open to invited volunteers. Sign in with the e-mail address your
+        invitation was sent to: we e-mail you a one-time code.</p>
+      <form id="signin-email">
+        <p>
+          <label for="signin-address">E-mail address</label>
+          <input id="signin-address" type="email" autocomplete="email" required maxlength="254">
+        </p>
+        <button type="submit" class="primary">Send me a code</button>
+      </form>
+      <form id="signin-code" hidden>
+        <p id="signin-sent"></p>
+        <p>
+          <label for="signin-number">Code</label>
+          <input id="signin-number" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" required
+            maxlength="7">
+        </p>
+        <button type="submit" class="primary">Sign in</button>
+        <button id="signin-again" type="button" class="link">Use another address or send a new code</button>
+      </form>
+      <p id="signin-error" class="warning" role="alert"></p>
     </section>
 
     <form id="consent" hidden>
       <h2 id="consent-title">Before you record</h2>
       <div id="consent-intro"></div>
-      <fieldset>
-        <legend>How your recordings are shared</legend>
-        <div id="licences"></div>
-      </fieldset>
       <p>
-        <label for="credit-name">Name to credit you by <span id="credit-hint" class="muted"></span></label>
+        <label for="credit-name">Name to credit you by <span class="muted">(optional, for the credits of the voices)</span></label>
         <input id="credit-name" name="credit_name" maxlength="80" autocomplete="name">
       </p>
       <fieldset>
@@ -55,7 +70,6 @@ SPDX-License-Identifier: Apache-2.0
       <h2>My data</h2>
       <dl class="facts">
         <dt>E-mail</dt><dd id="account-email"></dd>
-        <dt>Sharing</dt><dd id="account-licence"></dd>
         <dt>Accepted</dt><dd id="account-accepted"></dd>
       </dl>
       <form id="account-name-form" class="bar">
@@ -64,15 +78,16 @@ SPDX-License-Identifier: Apache-2.0
         <button type="submit">Save</button>
       </form>
       <h3>Download</h3>
-      <p>Everything we keep about you: your consent, your recordings and their reviews, and your microphone checks.</p>
+      <p>Everything we keep about you: your consent, your recordings and their reviews, and your microphone checks.
+        Your recordings are yours: you may publish them yourself, under any licence you like.</p>
       <div class="controls">
         <a id="account-export" class="button" href="/api/me/export" download>Download my data (JSON)</a>
         <button id="account-zip" type="button">Download my recordings (ZIP)</button>
       </div>
       <h3>Delete my account</h3>
-      <p>This deletes your consent, all your recordings and their reviews, and ends your invitation. It cannot be
-        undone. Recordings already published under an open licence stay with the people who copied them, but are
-        left out of every future release and model.</p>
+      <p>This deletes your consent, all your recordings and their reviews, also from backups, and ends your
+        invitation. Your recordings are left out of every future training. It cannot be undone, and models
+        already trained stay as they are.</p>
       <form id="account-delete-form" class="bar">
         <label for="account-delete-confirm">Type <b>delete</b> to confirm</label>
         <input id="account-delete-confirm" autocomplete="off">

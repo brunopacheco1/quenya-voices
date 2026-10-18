@@ -8,7 +8,7 @@ import worker from "../src/worker.js";
 import { encodeWav } from "../public/lib/audio.js";
 import { RATE, take } from "./signals.js";
 
-// Just enough of an R2 bucket for the worker.
+// Just enough of a storage bucket for the API.
 class FakeBucket {
   constructor() { this.objects = new Map(); }
   async put(key, value, options = {}) {
@@ -49,6 +49,8 @@ function setup() {
     DEV_EMAIL: "ana@example.org",
     REVIEWERS: "Rev@Example.org, other@example.org",
     TAKES: new FakeBucket(),
+    mails: [],
+    sendMail: async (mail) => { env.mails.push(mail); },
     ASSETS: { fetch: async (request) => new URL(request.url).pathname === "/script.tsv"
       ? new Response(SCRIPT) : new Response("page") },
   };
@@ -63,10 +65,19 @@ function setup() {
 const goodTake = () => encodeWav(take([[0.4, "silence"], [1, "speech"], [0.6, "silence"]]), RATE);
 const body = async (response) => response.json();
 
-async function startRecording(call, session = 1, licence = "training-only") {
-  await call("/api/consent", { method: "POST", json: { licence, agree: true } });
+async function startRecording(call, session = 1, creditName = undefined) {
+  await call("/api/consent", { method: "POST", json: { credit_name: creditName, agree: true } });
   return body(await call("/api/recordings", { method: "POST", json: { session } }));
 }
+
+test("plain HTTP is sent to HTTPS, and API answers ask browsers to stay on HTTPS", async () => {
+  const { env } = setup();
+  const redirect = await worker.fetch(new Request("http://x.workers.dev/api/me?a=1"), env);
+  assert.equal(redirect.status, 301);
+  assert.equal(redirect.headers.get("Location"), "https://x.workers.dev/api/me?a=1");
+  const answer = await worker.fetch(new Request("https://x.workers.dev/api/public/stats"), env);
+  assert.equal(answer.headers.get("Strict-Transport-Security"), "max-age=31536000");
+});
 
 test("the page itself is served from the static assets", async () => {
   const { ana } = setup();
@@ -79,18 +90,21 @@ test("nobody gets in without a signed-in volunteer", async () => {
   assert.equal(response.status, 401);
 });
 
-test("a licence is needed before recording, and is chosen once", async () => {
+test("consent is needed before recording, given once, and always for training only", async () => {
   const { ana } = setup();
   let me = await body(await ana("/api/me"));
   assert.equal(me.consent, null);
   assert.equal(me.reviewer, false);
+  assert.equal(me.terms.licences, undefined, "no sharing choice");
   assert.equal((await ana("/api/recordings", { method: "POST", json: { session: 1 } })).status, 403);
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", agree: true } })).status, 400);
+  assert.equal((await ana("/api/consent", { method: "POST", json: { credit_name: "Ana" } })).status, 400, "must agree");
   const consent = await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: " Ana  Silva ", agree: true } });
-  assert.equal((await body(consent)).credit_name, "Ana Silva");
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } })).status, 409);
+  const record = await body(consent);
+  assert.equal(record.credit_name, "Ana Silva");
+  assert.equal(record.licence, "training-only", "a requested open licence is ignored");
+  assert.equal((await ana("/api/consent", { method: "POST", json: { agree: true } })).status, 409);
   me = await body(await ana("/api/me"));
-  assert.equal(me.consent.licence, "CC-BY-4.0");
+  assert.equal(me.consent_current, true);
 });
 
 test("a volunteer records a draft, plays it back, and submits it incomplete only when they confirm", async () => {
@@ -164,10 +178,7 @@ test("volunteers only see their own recordings; only reviewers review", async ()
 test("review: redo needs reasons, opens only the named lines, and acceptance locks everything", async () => {
   const { ana, rev } = setup();
   assert.equal((await body(await rev("/api/me"))).reviewer, true);
-  const recording = await startRecording(ana, 1, "CC-BY-4.0");
-  assert.equal(recording.status, undefined, "CC BY needs a name");
-  await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: "Ana", agree: true } });
-  const draft = await body(await ana("/api/recordings", { method: "POST", json: { session: 1 } }));
+  const draft = await startRecording(ana, 1, "Ana");
   for (const line of ["s01_001", "s01_002", "s01_003"]) {
     await ana(`/api/recordings/${draft.id}/takes/${line}`, { method: "PUT", body: goodTake() });
   }
@@ -179,7 +190,6 @@ test("review: redo needs reasons, opens only the named lines, and acceptance loc
   assert.deepEqual(queue.waiting.map((w) => [w.name, w.session, w.recorded]), [["Ana", 1, 3]]);
   const path = `/api/review/${me.volunteer}/${draft.id}`;
   const submission = await body(await rev(path));
-  assert.equal(submission.licence, "CC-BY-4.0");
   assert.equal(submission.email, undefined);
   assert.equal((await rev(`${path}/takes/s01_002`)).headers.get("Content-Type"), "audio/wav");
 
@@ -229,47 +239,51 @@ test("my data: rename, export, and delete everything", async () => {
 
   assert.equal((await ana("/api/me", { method: "DELETE", json: {} })).status, 400);
   const deleted = await body(await ana("/api/me", { method: "DELETE", json: { confirm: "delete" } }));
-  assert.equal(deleted.invitation, "not configured");
+  assert.equal(deleted.invitation, "removed");
   const left = [...env.TAKES.objects.keys()];
   assert.equal(left.length, 1);
   assert.match(left[0], /^erasures\/[0-9a-f]{16}\.json$/);
   assert.equal((await body(await ana("/api/me"))).consent, null);
 });
 
-test("when the terms change, volunteers accept again with the same licence before recording", async () => {
+test("when the terms change, volunteers accept again before recording", async () => {
   const { ana, env } = setup();
-  const recording = await startRecording(ana, 1, "training-only");
+  const recording = await startRecording(ana);
   const key = [...env.TAKES.objects.keys()].find((k) => k.endsWith("consent.json"));
   const old = JSON.parse(new TextDecoder().decode(env.TAKES.objects.get(key).bytes));
   await env.TAKES.put(key, JSON.stringify({ ...old, consent_version: "2000-01-01" }));
   assert.equal((await body(await ana("/api/me"))).consent_current, false);
   assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 403);
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: "Ana", agree: true } })).status, 400);
-  const renewed = await body(await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } }));
+  const renewed = await body(await ana("/api/consent", { method: "POST", json: { agree: true } }));
   assert.equal(renewed.earlier[0].consent_version, "2000-01-01");
   assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
 });
 
-test("admins manage invitations in the Access group", async (t) => {
+test("an earlier consent to publish under CC BY must be renewed for training only", async () => {
+  const { ana, env } = setup();
+  const recording = await startRecording(ana);
+  const key = [...env.TAKES.objects.keys()].find((k) => k.endsWith("consent.json"));
+  const old = JSON.parse(new TextDecoder().decode(env.TAKES.objects.get(key).bytes));
+  await env.TAKES.put(key, JSON.stringify({ ...old, licence: "CC-BY-4.0" }));
+  assert.equal((await body(await ana("/api/me"))).consent_current, false);
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 403);
+  const renewed = await body(await ana("/api/consent", { method: "POST", json: { agree: true } }));
+  assert.equal(renewed.licence, "training-only");
+  assert.equal(renewed.earlier[0].licence, "CC-BY-4.0");
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
+});
+
+test("admins manage invitations", async () => {
   const { ana, env } = setup();
   env.ADMINS = "ana@example.org";
-  assert.equal((await ana("/api/admin/invites")).status, 501);
-  Object.assign(env, { CF_ACCOUNT_ID: "acc", ACCESS_GROUP_ID: "grp", CF_API_TOKEN: "token" });
-  let group = { name: "Volunteers", include: [{ email: { email: "ana@example.org" } }], exclude: [], require: [] };
-  const calls = [];
-  t.mock.method(globalThis, "fetch", async (url, init) => {
-    calls.push([init.method, url, init.headers.Authorization]);
-    if (init.method === "PUT") group = JSON.parse(init.body);
-    return new Response(JSON.stringify({ success: true, result: group }));
-  });
-  assert.deepEqual((await body(await ana("/api/admin/invites"))).invites, ["ana@example.org"]);
+  assert.deepEqual((await body(await ana("/api/admin/invites"))).invites, []);
   assert.equal((await ana("/api/admin/invites", { method: "POST", json: { email: "not an email" } })).status, 400);
   assert.deepEqual((await body(await ana("/api/admin/invites", { method: "POST", json: { email: " Bea@Example.org" } }))).invites,
-    ["ana@example.org", "bea@example.org"]);
+    ["bea@example.org"]);
+  assert.deepEqual((await body(await ana("/api/admin/invites", { method: "POST", json: { email: "cid@example.org" } }))).invites,
+    ["bea@example.org", "cid@example.org"]);
   assert.deepEqual((await body(await ana("/api/admin/invites", { method: "DELETE", json: { email: "bea@example.org" } }))).invites,
-    ["ana@example.org"]);
-  assert.equal(calls[0][1], "https://api.cloudflare.com/client/v4/accounts/acc/access/groups/grp");
-  assert.equal(calls[0][2], "Bearer token");
+    ["cid@example.org"]);
   env.ADMINS = "";
   assert.equal((await ana("/api/admin/invites")).status, 403);
 });

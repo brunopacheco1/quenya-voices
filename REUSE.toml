@@ -18,3 +18,4 @@ path = ["package.json", "package-lock.json", "site.json"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
 SPDX-License-Identifier = "Apache-2.0"
+

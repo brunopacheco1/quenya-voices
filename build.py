@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
 # SPDX-License-Identifier: Apache-2.0
 """
-Prepares the site's static files. Wrangler runs this before every deploy and dev run (wrangler.toml).
+Prepares the site's static files. npm run dev and npm test run this first (package.json); deploy/setup.sh runs it on the server.
 
 - public/script.tsv: the recording script from Quenya-TTS with an ipa column from its quenya_g2p, for the
   pronunciation hint.

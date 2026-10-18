@@ -66,7 +66,7 @@ async function api(path, options = {}) {
     throw new Error("no connection, or your sign-in has expired: reload the page");
   }
   if (response.status === 401) {
-    show("signed-out");
+    showSignIn();
     throw new SignedOut();
   }
   return response;
@@ -205,6 +205,11 @@ class App {
     $("nav-account").onclick = () => this.state === "idle" && this.account();
     $("nav-invites").onclick = () => this.state === "idle" && this.invites();
     $("nav-invites").hidden = !this.me.admin;
+    $("nav-signout").onclick = async () => {
+      if (this.state !== "idle") return;
+      await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" });
+      location.reload();
+    };
     $("nav").hidden = false;
     $("account-name-form").onsubmit = (event) => this.saveName(event);
     $("account-zip").onclick = () => this.downloadRecordings();
@@ -618,10 +623,9 @@ class App {
     const takes = new Map(submission.takes.map((take) => [take.id, take]));
     const lines = this.sessions.find(([session]) => session === submission.session)[1];
     this.reviewing = { volunteer, id, decisions: new Map() };
-    const licence = this.me.terms.licences[submission.licence]?.name || "no licence";
     $("review-title").textContent = `Session ${submission.session} by ${submission.name || `volunteer ${volunteer.slice(0, 6)}`}`;
     $("review-info").textContent = `Round ${submission.round}, submitted ${date(submission.submitted_at)}, `
-      + `${takes.size} of ${lines.length} lines recorded, sharing: ${licence}.`;
+      + `${takes.size} of ${lines.length} lines recorded.`;
     $("review-error").textContent = "";
     const reasons = Object.entries(this.me.reasons);
     $("review-lines").tBodies[0].replaceChildren(...lines.map((line) => {
@@ -709,10 +713,8 @@ class App {
     setMessage("");
     const { consent } = this.me;
     $("account-email").textContent = this.me.email;
-    $("account-licence").textContent = this.me.terms.licences[consent.licence].name.replace(/ \(recommended\)$/, "");
     $("account-accepted").textContent = new Date(consent.accepted_at).toLocaleString();
     $("account-name").value = consent.credit_name || "";
-    $("account-name").required = consent.licence === "CC-BY-4.0";
     show("account");
   }
 
@@ -724,7 +726,7 @@ class App {
     if (!response.ok) return setMessage(await errorText(response), true);
     this.me.consent = await response.json();
     showWho(this.me);
-    setMessage("Saved. Recordings published from now on credit you by this name.");
+    setMessage("Saved. Credits from now on use this name.");
   }
 
   async downloadRecordings() {
@@ -765,6 +767,7 @@ class App {
     show("signed-out");
     $("signed-out").querySelector("h2").textContent = "Your account was deleted";
     $("signed-out-text").textContent = "Your consent and all your recordings were deleted. Thank you for your time.";
+    $("signin-email").hidden = true;
   }
 
   // -- invitations (admins) --
@@ -874,42 +877,65 @@ class App {
   }
 }
 
-// ---- licence ----
+// ---- sign-in ----
 
-function showWho(me) {
-  const credit = me.consent.credit_name ? `, credited as ${me.consent.credit_name}` : "";
-  $("who").textContent = `Signed in as ${me.email} · your recordings: `
-    + `${me.terms.licences[me.consent.licence].short}${credit}.`;
+// The sign-in form: an e-mail address, then the one-time code e-mailed to it.
+function showSignIn() {
+  $("nav").hidden = true;
+  $("who").textContent = "";
+  const post = (path, body) => fetch(path, {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const failed = async (response) => {
+    $("signin-error").textContent = response.ok ? "" : await errorText(response);
+    return !response.ok;
+  };
+  $("signin-email").onsubmit = async (event) => {
+    event.preventDefault();
+    const email = $("signin-address").value.trim();
+    if (await failed(await post("/api/auth/start", { email }))) return;
+    $("signin-sent").textContent = `If ${email} is invited, a 6-digit code is on its way to it. It works for 15 minutes.`;
+    $("signin-email").hidden = true;
+    $("signin-code").hidden = false;
+    $("signin-number").value = "";
+    $("signin-number").focus();
+  };
+  $("signin-code").onsubmit = async (event) => {
+    event.preventDefault();
+    const response = await post("/api/auth/verify", { email: $("signin-address").value.trim(), code: $("signin-number").value });
+    if (!(await failed(response))) location.reload();
+  };
+  $("signin-again").onclick = () => {
+    $("signin-code").hidden = true;
+    $("signin-email").hidden = false;
+    $("signin-error").textContent = "";
+  };
+  show("signed-out");
 }
 
-// Asks for consent; with an earlier consent (the terms changed), the licence stays the one already chosen.
+// ---- consent ----
+
+function showWho(me) {
+  const credit = me.consent.credit_name ? ` · credited as ${me.consent.credit_name}` : "";
+  $("who").textContent = `Signed in as ${me.email}${credit}`;
+}
+
+// Asks for consent, again when the terms changed.
 function askConsent(me) {
   return new Promise((resolve) => {
-    const { intro, licences, statements } = me.terms;
+    const { intro, statements } = me.terms;
     const previous = me.consent;
     $("consent-title").textContent = previous ? "The terms have changed" : "Before you record";
     $("consent-intro").replaceChildren(...intro.map((text) => element("p", {}, ...withLinks(text))));
-    $("licences").replaceChildren(...Object.entries(licences).map(([id, licence]) => element("label", {},
-      element("input", { type: "radio", name: "licence", value: id, required: true,
-        checked: previous?.licence === id, disabled: Boolean(previous) && previous.licence !== id }),
-      element("span", {}, element("b", { textContent: licence.name }), `: ${licence.summary} `,
-        licence.url.startsWith("https:") ? element("a", { href: licence.url, textContent: "About the licence", target: "_blank", rel: "noopener" }) : ""))));
     $("statements").replaceChildren(...statements.map((statement) => element("label", {},
       element("input", { type: "checkbox", required: true }), element("span", {}, ...withLinks(statement)))));
     $("credit-name").value = previous?.credit_name || "";
-    const updateHint = () => {
-      const byName = $("consent").elements.licence.value === "CC-BY-4.0";
-      $("credit-hint").textContent = byName ? "(published with your recordings)" : "(optional, to credit you with the voices)";
-      $("credit-name").required = byName;
-    };
-    $("licences").addEventListener("change", updateHint);
-    updateHint();
     $("consent").onsubmit = async (event) => {
       event.preventDefault();
       const response = await api("/api/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ licence: $("consent").elements.licence.value, credit_name: $("credit-name").value, agree: true }),
+        body: JSON.stringify({ credit_name: $("credit-name").value, agree: true }),
       });
       if (!response.ok) {
         $("consent-error").textContent = await errorText(response);
@@ -938,6 +964,7 @@ async function main() {
   } catch (err) {
     if (err instanceof SignedOut) return;
     show("signed-out");
+    $("signin-email").hidden = true;
     $("signed-out-text").textContent = `The site could not load (${err.message}). Please try again later.`;
   }
 }
