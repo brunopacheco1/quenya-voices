@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+node_modules/
+.wrangler/
+.dev.vars
+.DS_Store
+__pycache__/

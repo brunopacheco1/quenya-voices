@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+#
+# SPDX-License-Identifier: Apache-2.0
+
+version = 1
+
+# GitHub templates carry no comment header, because GitHub copies the whole file into every new issue or pull
+# request.
+[[annotations]]
+path = [".github/pull_request_template.md", ".github/ISSUE_TEMPLATE/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
+SPDX-License-Identifier = "Apache-2.0"
