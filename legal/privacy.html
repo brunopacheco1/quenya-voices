@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
   </header>
   <main class="legal">
     <p>Quenya Voices is a website where invited volunteers record themselves reading Quenya, to build an open
-      collection of recordings and an open text-to-speech voice for Quenya. This notice explains what personal
+      text-to-speech voice for Quenya. The recordings themselves are never published. This notice explains what personal
       data the site handles, why, and your rights under the EU General Data Protection Regulation (GDPR).</p>
 
     <h2>Who is responsible</h2>
@@ -35,14 +35,13 @@ SPDX-License-Identifier: Apache-2.0
             accept, our legitimate interest in sending the invitation you asked for (art. 6(1)(f)).</td>
             <td>Until you delete your account or ask us to.</td></tr>
           <tr><td>Your voice recordings</td><td>To review them and train open speech models (for example for the
-            audio of the book <i>Ma Quetilyë Quenya?</i>), and, only if you chose so, to publish them as open data.</td>
+            audio of the book <i>Ma Quetilyë Quenya?</i>). Never published.</td>
             <td>Your consent (art. 6(1)(a)).</td><td>Drafts: until you delete them. Submitted and accepted recordings:
             until you withdraw your consent.</td></tr>
-          <tr><td>How you chose to share your recordings, the name you want to be credited by (optional unless you
-            publish under CC BY), and the date and wording of your consent</td><td>To use your recordings as you
-            chose, credit you, and show that you agreed.</td><td>Your consent (art. 6(1)(a)); keeping proof of it is a legal obligation (art. 6(1)(c),
-            art. 7(1)).</td><td>As long as we keep your recordings, and the proof of consent for as long as
-            published copies may exist.</td></tr>
+          <tr><td>The name you want to be credited by (optional), and the date and wording of your consent</td>
+            <td>To credit you, and show that you agreed.</td><td>Your consent (art. 6(1)(a)); keeping proof of it is a
+            legal obligation (art. 6(1)(c), art. 7(1)).</td><td>As long as we keep your recordings, and the proof of
+            consent for as long as models trained on them are published.</td></tr>
           <tr><td>Microphone check results (noise level and similar numbers, no audio)</td><td>To help you and the
             reviewers judge recording quality.</td><td>Your consent (art. 6(1)(a)).</td>
             <td>{{mic_check_retention_months}} months.</td></tr>
@@ -56,11 +55,17 @@ SPDX-License-Identifier: Apache-2.0
     </div>
     <h2>When recordings are used for training</h2>
     <p>Recordings are used to train a speech model only if you gave your consent to it (when you accepted the
-      licence) and a reviewer accepted them, and only once the accepted recordings of all volunteers together
+      terms) and a reviewer accepted them, and only once the accepted recordings of all volunteers together
       reach {{minimum_training_minutes}} minutes of speech. The first training starts no earlier than
       {{training_wait_days}} days after that minimum is reached, so everyone has time to check their data or ask for
       erasure. Later trainings start whenever needed. The current totals are public on the
       <a href="stats.html">progress page</a>.</p>
+
+    <p>Published models speak with an artificial voice, not yours. Before each release we compare that voice with
+      the voices of the accepted recordings, only to make sure it does not sound like any volunteer; the
+      comparison is done on the training computer and not kept. Published models are licensed so that imitating
+      real people is forbidden, and everything they produce carries a watermark that marks it as AI-generated.
+      A model still learns from every voice it hears, so it may produce speech that sounds somewhat like you.</p>
 
     <p>We do not use your voice to identify you, we do not profile you, and we make no automated decisions that
       affect you. The automatic checks on each take only ask you to record it again when it is clipped, silent or
@@ -74,9 +79,11 @@ SPDX-License-Identifier: Apache-2.0
         EU Standard Contractual Clauses.</li>
       <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
         but not your e-mail address.</li>
-      <li><b>The public</b>: the trained models, and the name you want to be credited by. Your recordings
-        themselves only if you chose to publish them under CC BY 4.0; then anyone may copy and use them under that
-        licence. Note that a model trained on your voice can produce speech that sounds like you.</li>
+      <li><b>Training services</b>: accepted recordings are copied to the computer that trains the model, either
+        one of the project's own or a GPU service used as our processor (currently Kaggle, by Google LLC, in a
+        private dataset). They are deleted there, or replaced, whenever a volunteer asks for erasure.</li>
+      <li><b>The public</b>: the trained models (with an artificial voice), audio made with them, and the name you
+        want to be credited by. Never your recordings.</li>
     </ul>
 
     <h2>Your rights</h2>
@@ -88,8 +95,7 @@ SPDX-License-Identifier: Apache-2.0
       <li><b>withdraw your consent and have your data erased</b>, at any time: <i>My data</i> → <i>Delete my
         account</i>, or by writing to us (art. 7(3) and 17). We then delete your data from our storage and our
         backups and leave it out of every future training and release. Erasure cannot reach what was already done
-        with your consent before: models already trained on your recordings, and, if you chose to publish your
-        recordings under CC BY, copies that others made of them;</li>
+        with your consent before: models already trained on your recordings stay as they are;</li>
       <li><b>restrict or object</b> to processing, by writing to us (art. 18 and 21).</li>
     </ul>
     <p>For anything else, write to <a href="mailto:{{contact_email}}">{{contact_email}}</a>. We answer within one

@@ -31,9 +31,9 @@ Recording is by invitation. Say hello in the book's
 
 - **Sign-in by invitation.** Only invited e-mail addresses get in. Admins invite people on the site's
   *Invitations* page, or in the Cloudflare dashboard.
-- **Consent first.** Before recording, each volunteer chooses how their recordings are shared. *Training only* is
-  the recommended default: the recordings stay private and are used only to train open voices. The other choice
-  is *also publish them under CC BY 4.0*. They confirm they are 18 or older and accept the
+- **Consent first.** Recordings are used only to train open voices and are never published; volunteers can
+  download their own and publish them themselves. Before recording, volunteers confirm they are 18 or older, that a
+  trained model may still sound somewhat like them, and accept the
   [Terms](legal/terms.html) and [Privacy Notice](legal/privacy.html). When those pages change, everyone accepts
   again before recording.
 - **Microphone check** at each visit. Three seconds of silence and one sentence measure the room noise and the
@@ -80,7 +80,7 @@ while you stay within the allowances above.
 
 ### Setting it up (once)
 
-You need a Cloudflare account, Node.js 20 or newer, and Python 3 for the build step. From a clone of this
+You need a Cloudflare account, Node.js 22 or newer (Wrangler needs it), and Python 3 for the build step. From a clone of this
 repository:
 
 ```
@@ -203,5 +203,6 @@ The code is under the [Apache License 2.0](LICENSE). Documentation and the texts
 [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Every file states its licence in an SPDX header or in
 [REUSE.toml](REUSE.toml), following the [REUSE](https://reuse.software/) specification.
 
-The volunteers' recordings are not part of this repository. Each volunteer chooses on the site whether their
-recordings are used only for training, or also published under CC BY 4.0.
+The volunteers' recordings are not part of this repository, and the site never publishes them: they are used only
+for training. Published models speak with an artificial voice, are licensed to forbid imitating real people, and
+watermark everything they produce (see Quenya-TTS).

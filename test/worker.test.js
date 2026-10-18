@@ -63,8 +63,8 @@ function setup() {
 const goodTake = () => encodeWav(take([[0.4, "silence"], [1, "speech"], [0.6, "silence"]]), RATE);
 const body = async (response) => response.json();
 
-async function startRecording(call, session = 1, licence = "training-only") {
-  await call("/api/consent", { method: "POST", json: { licence, agree: true } });
+async function startRecording(call, session = 1, creditName = undefined) {
+  await call("/api/consent", { method: "POST", json: { credit_name: creditName, agree: true } });
   return body(await call("/api/recordings", { method: "POST", json: { session } }));
 }
 
@@ -79,18 +79,21 @@ test("nobody gets in without a signed-in volunteer", async () => {
   assert.equal(response.status, 401);
 });
 
-test("a licence is needed before recording, and is chosen once", async () => {
+test("consent is needed before recording, given once, and always for training only", async () => {
   const { ana } = setup();
   let me = await body(await ana("/api/me"));
   assert.equal(me.consent, null);
   assert.equal(me.reviewer, false);
+  assert.equal(me.terms.licences, undefined, "no sharing choice");
   assert.equal((await ana("/api/recordings", { method: "POST", json: { session: 1 } })).status, 403);
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", agree: true } })).status, 400);
+  assert.equal((await ana("/api/consent", { method: "POST", json: { credit_name: "Ana" } })).status, 400, "must agree");
   const consent = await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: " Ana  Silva ", agree: true } });
-  assert.equal((await body(consent)).credit_name, "Ana Silva");
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } })).status, 409);
+  const record = await body(consent);
+  assert.equal(record.credit_name, "Ana Silva");
+  assert.equal(record.licence, "training-only", "a requested open licence is ignored");
+  assert.equal((await ana("/api/consent", { method: "POST", json: { agree: true } })).status, 409);
   me = await body(await ana("/api/me"));
-  assert.equal(me.consent.licence, "CC-BY-4.0");
+  assert.equal(me.consent_current, true);
 });
 
 test("a volunteer records a draft, plays it back, and submits it incomplete only when they confirm", async () => {
@@ -164,10 +167,7 @@ test("volunteers only see their own recordings; only reviewers review", async ()
 test("review: redo needs reasons, opens only the named lines, and acceptance locks everything", async () => {
   const { ana, rev } = setup();
   assert.equal((await body(await rev("/api/me"))).reviewer, true);
-  const recording = await startRecording(ana, 1, "CC-BY-4.0");
-  assert.equal(recording.status, undefined, "CC BY needs a name");
-  await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: "Ana", agree: true } });
-  const draft = await body(await ana("/api/recordings", { method: "POST", json: { session: 1 } }));
+  const draft = await startRecording(ana, 1, "Ana");
   for (const line of ["s01_001", "s01_002", "s01_003"]) {
     await ana(`/api/recordings/${draft.id}/takes/${line}`, { method: "PUT", body: goodTake() });
   }
@@ -179,7 +179,6 @@ test("review: redo needs reasons, opens only the named lines, and acceptance loc
   assert.deepEqual(queue.waiting.map((w) => [w.name, w.session, w.recorded]), [["Ana", 1, 3]]);
   const path = `/api/review/${me.volunteer}/${draft.id}`;
   const submission = await body(await rev(path));
-  assert.equal(submission.licence, "CC-BY-4.0");
   assert.equal(submission.email, undefined);
   assert.equal((await rev(`${path}/takes/s01_002`)).headers.get("Content-Type"), "audio/wav");
 
@@ -236,17 +235,30 @@ test("my data: rename, export, and delete everything", async () => {
   assert.equal((await body(await ana("/api/me"))).consent, null);
 });
 
-test("when the terms change, volunteers accept again with the same licence before recording", async () => {
+test("when the terms change, volunteers accept again before recording", async () => {
   const { ana, env } = setup();
-  const recording = await startRecording(ana, 1, "training-only");
+  const recording = await startRecording(ana);
   const key = [...env.TAKES.objects.keys()].find((k) => k.endsWith("consent.json"));
   const old = JSON.parse(new TextDecoder().decode(env.TAKES.objects.get(key).bytes));
   await env.TAKES.put(key, JSON.stringify({ ...old, consent_version: "2000-01-01" }));
   assert.equal((await body(await ana("/api/me"))).consent_current, false);
   assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 403);
-  assert.equal((await ana("/api/consent", { method: "POST", json: { licence: "CC-BY-4.0", credit_name: "Ana", agree: true } })).status, 400);
-  const renewed = await body(await ana("/api/consent", { method: "POST", json: { licence: "training-only", agree: true } }));
+  const renewed = await body(await ana("/api/consent", { method: "POST", json: { agree: true } }));
   assert.equal(renewed.earlier[0].consent_version, "2000-01-01");
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
+});
+
+test("an earlier consent to publish under CC BY must be renewed for training only", async () => {
+  const { ana, env } = setup();
+  const recording = await startRecording(ana);
+  const key = [...env.TAKES.objects.keys()].find((k) => k.endsWith("consent.json"));
+  const old = JSON.parse(new TextDecoder().decode(env.TAKES.objects.get(key).bytes));
+  await env.TAKES.put(key, JSON.stringify({ ...old, licence: "CC-BY-4.0" }));
+  assert.equal((await body(await ana("/api/me"))).consent_current, false);
+  assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 403);
+  const renewed = await body(await ana("/api/consent", { method: "POST", json: { agree: true } }));
+  assert.equal(renewed.licence, "training-only");
+  assert.equal(renewed.earlier[0].licence, "CC-BY-4.0");
   assert.equal((await ana(`/api/recordings/${recording.id}/takes/s01_001`, { method: "PUT", body: goodTake() })).status, 201);
 });
 

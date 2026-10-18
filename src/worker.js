@@ -10,7 +10,7 @@
 // back with a reason; only those lines open again for the volunteer (see public/lib/review.js).
 //
 // Storage (R2 bucket bound as TAKES):
-//   volunteers/<volunteer>/consent.json                  licence and statements the volunteer accepted
+//   volunteers/<volunteer>/consent.json                  the statements the volunteer accepted, and when
 //   mic-checks/<volunteer>/<time>.json                   results of each microphone check (an R2 lifecycle rule
 //                                                        deletes them after the time in the Privacy Notice)
 //   recordings/<volunteer>/<recording>/recording.json   session, status (draft/submitted), dates
@@ -27,7 +27,7 @@
 // Volunteers:
 //   GET  /api/me                                    who is signed in, their consent (or null), the consent text
 //   GET  /api/me/contribution                       the volunteer's accepted, waiting and draft minutes
-//   POST /api/consent                               accept a licence: {licence, credit_name, agree}
+//   POST /api/consent                               accept the terms: {credit_name, agree}
 //   POST /api/me/name                               change the name to be credited by: {credit_name}
 //   GET  /api/me/export                             all data kept about the volunteer (audio: the takes URLs)
 //   DELETE /api/me                                  {confirm: "delete"}: erase the account and every recording
@@ -42,7 +42,7 @@
 //   GET  /api/reference/<line>                      the TTS reading of a line, if there is one
 // Reviewers only:
 //   GET  /api/review                                waiting submissions, oldest first, and accepted totals
-//   GET  /api/review/<volunteer>/<recording>        a submission, its takes and the volunteer's licence
+//   GET  /api/review/<volunteer>/<recording>        a submission and its takes
 //   GET  /api/review/<volunteer>/<recording>/takes/<line>   a take
 //   POST /api/review/<volunteer>/<recording>        {decision: "accept" | "redo", redo: {line: {reason, note}}}
 // Admins only (the e-mails in ADMINS):
@@ -52,7 +52,7 @@
 
 import { volunteerEmail } from "./access.js";
 import site from "../site.json" with { type: "json" };
-import { CONSENT_VERSION, INTRO, LICENCES, STATEMENTS, cleanName, consentRecord } from "./consent.js";
+import { CONSENT_VERSION, INTRO, STATEMENTS, cleanName, consentCurrent, consentRecord } from "./consent.js";
 import { changeInvite, invitesConfigured, listInvites, validEmail } from "./invites.js";
 import { decodeWav, readWavHeader, wavProblem } from "../public/lib/audio.js";
 import { LIMITS, peakAndClipped } from "../public/lib/quality.js";
@@ -69,7 +69,6 @@ const VOLUNTEER_ID = /^[0-9a-f]{16}$/;
 const listed = (list, email) => (list || "").split(",").map((entry) => entry.trim().toLowerCase()).includes(email);
 const isReviewer = (email, env) => listed(env.REVIEWERS, email);
 const isAdmin = (email, env) => listed(env.ADMINS, email);
-const consentCurrent = (consent) => consent?.consent_version === CONSENT_VERSION;
 
 // Whether the volunteer may (re)record this line now.
 function canRecord(recording, lineId) {
@@ -323,7 +322,6 @@ async function handleReview(request, env, reviewer, rest) {
       ...recording,
       volunteer,
       name: consent?.credit_name || null,
-      licence: consent?.licence || null,
       takes,
     });
   }
@@ -420,7 +418,7 @@ async function handleApi(request, env) {
       reasons: REASONS,
       consent,
       consent_current: consentCurrent(consent),
-      terms: { version: CONSENT_VERSION, intro: INTRO, licences: LICENCES, statements: STATEMENTS },
+      terms: { version: CONSENT_VERSION, intro: INTRO, statements: STATEMENTS },
     });
   }
 
@@ -454,10 +452,9 @@ async function handleApi(request, env) {
 
   if (path === "/api/me/name" && method === "POST") {
     const consent = await readJson(env, consentKey);
-    if (!consent) return error(403, "Choose a licence first.");
+    if (!consent) return error(403, "Accept the terms first.");
     const name = cleanName(((await requestJson(request)) || {}).credit_name);
     if (name === undefined) return error(400, "The name is too long (80 characters at most).");
-    if (!name && consent.licence === "CC-BY-4.0") return error(400, "CC BY needs a name to credit you by.");
     const updated = { ...consent, credit_name: name || null, name_changed_at: new Date().toISOString() };
     await writeJson(env, consentKey, updated);
     return json(updated);
