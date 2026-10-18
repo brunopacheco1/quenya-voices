@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `npm run dev`. Signs you in as this address on localhost only.
+DEV_EMAIL=you@example.com

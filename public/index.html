@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+SPDX-License-Identifier: Apache-2.0
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quenya Voices</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>Quenya Voices</h1>
+    <p id="who" class="muted"></p>
+  </header>
+
+  <main>
+    <p id="loading">Loading…</p>
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <section id="signed-out" hidden>
+      <h2>Please sign in</h2>
+      <p id="signed-out-text">This site is open to invited volunteers. Open it from the link in your invitation and
+        sign in with the e-mail address it was sent to.</p>
+    </section>
+
+    <form id="consent" hidden>
+      <h2>Before you record</h2>
+      <div id="consent-intro"></div>
+      <fieldset>
+        <legend>Licence for your recordings</legend>
+        <div id="licences"></div>
+      </fieldset>
+      <p>
+        <label for="credit-name">Name to credit you by <span id="credit-hint" class="muted"></span></label>
+        <input id="credit-name" name="credit_name" maxlength="80" autocomplete="name">
+      </p>
+      <fieldset>
+        <legend>I confirm that</legend>
+        <div id="statements"></div>
+      </fieldset>
+      <p id="consent-error" class="warning" role="alert"></p>
+      <button type="submit" class="primary">Accept and continue</button>
+    </form>
+
+    <section id="home" hidden>
+      <h2>Your recordings</h2>
+      <p class="muted">Each recording is one session of the script, 100 lines. Record the lines in any order,
+        listen to them, redo them, and submit the recording for review when you are happy with it. Only you can
+        hear your recordings until you submit them.</p>
+      <div class="table-wrap">
+        <table id="recordings">
+          <thead><tr><th scope="col">Session</th><th scope="col">Status</th><th scope="col">Lines</th>
+            <th scope="col">Started</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="no-recordings" class="muted" hidden>You have no recordings yet. Start with session 1: its lines cover
+        every sound of Quenya.</p>
+      <div class="bar">
+        <label for="new-session">Start a new recording of session</label>
+        <select id="new-session"></select>
+        <button id="new-recording" type="button" class="primary">Start</button>
+      </div>
+
+      <div id="reviewer-home" hidden>
+        <h2>Waiting for review</h2>
+        <div class="table-wrap">
+          <table id="queue">
+            <thead><tr><th scope="col">Volunteer</th><th scope="col">Session</th><th scope="col">Round</th>
+              <th scope="col">Lines</th><th scope="col">Submitted</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="queue-empty" class="muted" hidden>Nothing is waiting for review.</p>
+        <h2>Accepted so far</h2>
+        <p id="accepted-total"></p>
+        <div class="table-wrap">
+          <table id="accepted">
+            <thead><tr><th scope="col">Volunteer</th><th scope="col">Recordings</th><th scope="col">Minutes of speech</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="review" hidden>
+      <h2 id="review-title"></h2>
+      <p id="review-info" class="muted"></p>
+      <p>Listen to each take. Every line you do not send back is accepted and locked. To send a line back, choose
+        <b>Redo</b>, a reason, and say what to change, so the volunteer knows what to fix.</p>
+      <div class="table-wrap">
+        <table id="review-lines">
+          <thead><tr><th scope="col">Line</th><th scope="col">Text</th><th scope="col">Take</th>
+            <th scope="col">Decision</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="review-error" class="warning" role="alert"></p>
+      <div class="controls">
+        <button id="review-accept" type="button" class="primary">Accept the recording</button>
+        <button id="review-redo" type="button">Send lines back for redo</button>
+        <button id="review-home" type="button">Back</button>
+      </div>
+    </section>
+
+    <section id="mic-check" hidden>
+      <h2>Microphone check</h2>
+      <p>Before recording, a short check of your microphone and room, so every take meets a minimum quality.
+        Use the microphone and the place you will record with.</p>
+      <ol>
+        <li>Stay quiet for three seconds while the room noise is measured.</li>
+        <li>Then read this sentence aloud and press Stop:
+          <span class="sentence" lang="qya">Elen síla lúmenn' omentielvo.</span></li>
+      </ol>
+      <div class="meter" aria-hidden="true"><div id="check-meter"></div></div>
+      <p id="check-step" role="status" aria-live="polite"></p>
+      <ul id="check-results"></ul>
+      <div class="controls">
+        <button id="check-start" type="button" class="primary">Start the check</button>
+        <button id="check-continue" type="button" hidden>Continue anyway</button>
+        <button id="check-back" type="button">Back</button>
+      </div>
+    </section>
+
+    <section id="summary" hidden>
+      <h2 id="summary-title"></h2>
+      <p id="summary-counts"></p>
+      <div class="controls">
+        <button id="summary-record" type="button" class="primary">Record line by line</button>
+        <button id="summary-submit" type="button">Submit for review</button>
+        <button id="summary-delete" type="button">Delete this draft</button>
+        <button id="summary-home" type="button">All recordings</button>
+      </div>
+      <div class="table-wrap">
+        <table id="lines">
+          <thead><tr><th scope="col">Line</th><th scope="col">Text</th><th scope="col">Take</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="studio" hidden>
+      <div class="bar">
+        <progress id="session-progress" max="100" value="0" aria-label="Lines recorded in this recording"></progress>
+        <span id="session-count" class="muted"></span>
+        <button id="studio-summary" type="button">Summary</button>
+      </div>
+
+      <article class="line" aria-labelledby="line-text">
+        <p class="muted"><span id="line-position"></span> · <span id="line-id"></span> ·
+          <span id="line-state"></span></p>
+        <p id="line-text" lang="qya"></p>
+        <p id="line-ipa" class="ipa muted" title="Pronunciation (IPA), from the project's pronunciation rules"></p>
+        <p id="line-gloss" class="muted"></p>
+        <p id="line-redo" class="warning"></p>
+      </article>
+
+      <div class="meter" aria-hidden="true"><div id="meter-level"></div></div>
+
+      <div class="controls">
+        <button id="listen" type="button" title="Hear the line read by the computer (L)">Listen</button>
+        <button id="record" type="button" class="primary" title="Space">Record</button>
+        <button id="play" type="button" title="Play your take (P)" disabled>Play back</button>
+      </div>
+      <div class="controls">
+        <button id="previous" type="button" title="Left arrow">← Previous</button>
+        <button id="next" type="button" title="Right arrow">Next →</button>
+        <button id="recheck" type="button">Check the microphone again</button>
+      </div>
+      <p><label><input id="auto-next" type="checkbox" checked> Go to the next line after a take without warnings</label></p>
+
+      <details>
+        <summary>How to read</summary>
+        <ul>
+          <li>Use a quiet room and a headset or USB microphone, always the same one, a hand's width from your mouth.
+            Not the laptop's built-in microphone.</li>
+          <li>Read calmly and clearly, as you would speak it. Leave a short silence before and after each line.</li>
+          <li>Pronounce it as Third Age Quenya: long vowels long, double consonants long, <i>r</i> trilled. Listen
+            plays a computer reading of the line, when there is one, if you are unsure.</li>
+          <li>Word lists (<i lang="qya">Valtan, loica, oiavë.</i>) are read with a small pause at each comma.</li>
+          <li>Keys: Space to record and stop, P to play back, L to listen, arrows for the previous and next line.</li>
+          <li>Every take is checked as soon as you stop. A take that is clipped, almost silent or empty is not kept:
+            record it again. Other problems (noise, a cut-off ending, a long pause) are shown and the take is kept,
+            so you can decide whether to record it again. Recording a line again replaces its take.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

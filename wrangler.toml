@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+# Cloudflare Worker for the volunteer recording site. Setup and deployment: README.md.
+name = "quenya-recorder"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+# keep the variables set in the dashboard when deploying
+keep_vars = true
+
+# The page reads the script (with a pronunciation column) from the static assets; build.py writes it.
+[build]
+command = "python3 build.py"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[r2_buckets]]
+binding = "TAKES"
+bucket_name = "quenya-recordings"
+
+# Not secret, but specific to your Cloudflare account: set them in the dashboard (Worker > Settings >
+# Variables) or uncomment and fill in here. Without them the API refuses everyone.
+# [vars]
+# ACCESS_TEAM_DOMAIN = "<your-team>.cloudflareaccess.com"
+# ACCESS_AUD = "<Application Audience (AUD) tag of the Access application>"
