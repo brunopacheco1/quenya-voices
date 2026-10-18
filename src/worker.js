@@ -577,16 +577,28 @@ async function handleApi(request, env) {
   return error(404, "Not found.");
 }
 
+// Browsers keep to HTTPS for a year after their first visit; the static pages get the same header from
+// public/_headers. Local development (wrangler dev) runs on plain http://localhost.
+const HSTS = "max-age=31536000";
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
 export default {
   async fetch(request, env) {
-    if (new URL(request.url).pathname.startsWith("/api/")) {
-      try {
-        return await handleApi(request, env);
-      } catch (err) {
-        console.error(err);
-        return error(500, "Something went wrong on the server. Please try again.");
-      }
+    const url = new URL(request.url);
+    if (url.protocol === "http:" && !LOCAL_HOSTS.has(url.hostname)) {
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
     }
-    return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    let response;
+    try {
+      response = await handleApi(request, env);
+    } catch (err) {
+      console.error(err);
+      response = error(500, "Something went wrong on the server. Please try again.");
+    }
+    response = new Response(response.body, response);
+    response.headers.set("Strict-Transport-Security", HSTS);
+    return response;
   },
 };

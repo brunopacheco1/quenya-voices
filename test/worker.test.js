@@ -68,6 +68,15 @@ async function startRecording(call, session = 1, creditName = undefined) {
   return body(await call("/api/recordings", { method: "POST", json: { session } }));
 }
 
+test("plain HTTP is sent to HTTPS, and API answers ask browsers to stay on HTTPS", async () => {
+  const { env } = setup();
+  const redirect = await worker.fetch(new Request("http://x.workers.dev/api/me?a=1"), env);
+  assert.equal(redirect.status, 301);
+  assert.equal(redirect.headers.get("Location"), "https://x.workers.dev/api/me?a=1");
+  const answer = await worker.fetch(new Request("https://x.workers.dev/api/public/stats"), env);
+  assert.equal(answer.headers.get("Strict-Transport-Security"), "max-age=31536000");
+});
+
 test("the page itself is served from the static assets", async () => {
   const { ana } = setup();
   assert.equal(await (await ana("/")).text(), "page");

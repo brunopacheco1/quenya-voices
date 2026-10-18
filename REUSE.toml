@@ -18,3 +18,9 @@ path = ["package.json", "package-lock.json", "site.json"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
 SPDX-License-Identifier = "Apache-2.0"
+
+# Cloudflare's headers file for the static assets has no agreed comment syntax.
+[[annotations]]
+path = "public/_headers"
+SPDX-FileCopyrightText = "2026 Bruno Pacheco (https://bruno.pacheco.lu)"
+SPDX-License-Identifier = "Apache-2.0"

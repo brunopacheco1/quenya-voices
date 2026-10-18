@@ -167,6 +167,9 @@ checkout, inside its `.venv`.
   It prints a `prepare_corpus` command for each accepted recording. Run the download before every training,
   because it also deletes the local copies of volunteers who asked for erasure. Treat that folder as the only
   copy outside Cloudflare: any other backup must be refreshed the same way, to keep the erasure promise.
+
+  Keep the download folder on an encrypted disk (FileVault on macOS, BitLocker or LUKS elsewhere), and upload it
+  to a training service only as a private dataset: the Privacy Notice promises encryption at rest everywhere.
 - **Changing the legal texts**: edit `legal/`, set `last_updated` in `site.json` to the new date, and deploy.
   Everyone is asked to accept again before recording.
 
