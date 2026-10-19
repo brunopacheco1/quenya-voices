@@ -4,12 +4,12 @@
 
 # Sets up the site on a fresh Ubuntu 24.04 machine, as root:
 #   curl -fsSLO https://raw.githubusercontent.com/brunopacheco1/quenya-voices/main/deploy/setup.sh
-#   sudo bash setup.sh voices.tolkien.lu
+#   sudo bash setup.sh voices.pacheco.lu
 # Then fill in /etc/quenya-voices.env and run: sudo systemctl restart quenya-voices
 # Running it again is safe: it updates the code and keeps the settings.
 set -euo pipefail
 
-DOMAIN="${1:?usage: setup.sh <site address, e.g. voices.tolkien.lu>}"
+DOMAIN="${1:?usage: setup.sh <site address, e.g. voices.pacheco.lu>}"
 NODE_MAJOR=22
 APP=/opt/quenya-voices
 

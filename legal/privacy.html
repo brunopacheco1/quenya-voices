@@ -78,7 +78,8 @@ SPDX-License-Identifier: Apache-2.0
         European Union, as our processor under its data processing agreement. Everything is encrypted by the site
         before it is stored, so Gcore cannot read your recordings or your details.</li>
       <li><b>{{mail_provider}}</b> sends the e-mails with your sign-in codes, as our processor. It receives your
-        e-mail address and the code, nothing else.</li>
+        e-mail address and the code, nothing else. Its data processing agreement allows some of its subprocessors to
+        be outside the European Union (for example in the United States), under the safeguards that agreement sets out.</li>
       <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
         but not your e-mail address.</li>
       <li><b>Gcore</b> also provides the GPU machine that trains the model. For each training, accepted recordings are copied over HTTPS to a
@@ -90,7 +91,8 @@ SPDX-License-Identifier: Apache-2.0
     </ul>
 
     <h2>How we protect it</h2>
-    <p>Your data stays in the European Union and is encrypted in transit (the site and every copy for training use
+    <p>Your recordings and details stay in the European Union (only the sign-in e-mail goes through
+      {{mail_provider}}, as above) and are encrypted in transit (the site and every copy for training use
       HTTPS only) and at rest: the site encrypts every recording and every detail about you (AES-256) before storing
       it, with a key that only the site and the training have. Copies for training are temporary and deleted with
       the training machine. The site keeps no visitor logs. Only you, the reviewers (your submitted recordings) and
