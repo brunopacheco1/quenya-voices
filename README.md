@@ -78,19 +78,19 @@ Prices from Gcore's pricing pages on 2026-10-18; check them again before relying
 ### Setting it up (once)
 
 You need a Gcore account, a mailbox that can send through SMTP, and a domain name (for example
-`voices.tolkien.lu`).
+`voices.pacheco.lu`).
 
 1. **Storage**: in Gcore, *Cloud → Object Storage → Create storage*, type S3, location **Luxembourg-2**. Create a
    bucket `quenya-recordings` in it, keep it private, and note the access key and secret key.
 2. **Machine**: *Cloud → Virtual Instances → Create*, region **Luxembourg**, Ubuntu 24.04, the smallest shared
    flavor (1 vCPU, 2 GB), a public IP, and your SSH key. In its security group, allow ports 80 and 443 from
    everywhere, and 22 from your own address only.
-3. **DNS**: an `A` record from the site's address to the machine's IP (for `tolkien.lu`, at dns.lu).
+3. **DNS**: an `A` record from the site's address to the machine's IP (for `pacheco.lu`, at its DNS provider).
 4. **Install**: on the machine,
 
    ```
    curl -fsSLO https://raw.githubusercontent.com/brunopacheco1/quenya-voices/main/deploy/setup.sh
-   sudo bash setup.sh voices.tolkien.lu
+   sudo bash setup.sh voices.pacheco.lu
    ```
 
    It installs Node.js, Caddy and the site, and starts them. Caddy gets the HTTPS certificate by itself.
@@ -101,7 +101,7 @@ You need a Gcore account, a mailbox that can send through SMTP, and a domain nam
 6. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are a
    careful draft, not legal advice.
 
-Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.tolkien.lu` pulls the latest code and
+Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.pacheco.lu` pulls the latest code and
 restarts the site; the settings stay. Logs: `journalctl -u quenya-voices`.
 
 The machine keeps no data of its own (everything is in the object storage), so it needs no backups: a new machine
