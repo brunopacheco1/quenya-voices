@@ -73,11 +73,11 @@ Prices from Gcore's pricing pages on 2026-10-18; check them again before relying
 |---|---|---|
 | Virtual machine (1 vCPU, 2 GB, Luxembourg) | about €2–5 a month with its disk and IP | runs the site |
 | Object storage, S3 Standard Luxembourg-2 | €0.04 per GB a month, €0.03 per 10,000 requests, €0.02 per GB downloaded | 48 kHz 16-bit mono WAV is about 345 MB per hour of speech: 30 hours cost about €0.40 a month |
-| Sign-in e-mails | your mailbox's SMTP | a few e-mails per volunteer |
+| Sign-in e-mails | Brevo free plan: 300 e-mails a day, €0 | a few e-mails per volunteer |
 
 ### Setting it up (once)
 
-You need a Gcore account, a mailbox that can send through SMTP, and a domain name (for example
+You need a Gcore account, a Brevo account (free) to send the sign-in codes, and a domain name (for example
 `voices.pacheco.lu`).
 
 1. **Storage**: in Gcore, *Cloud → Object Storage → Create storage*, type S3, location **Luxembourg-2**. Create a
@@ -86,7 +86,12 @@ You need a Gcore account, a mailbox that can send through SMTP, and a domain nam
    flavor (1 vCPU, 2 GB), a public IP, and your SSH key. In its security group, allow ports 80 and 443 from
    everywhere, and 22 from your own address only.
 3. **DNS**: an `A` record from the site's address to the machine's IP (for `pacheco.lu`, at its DNS provider).
-4. **Install**: on the machine,
+4. **E-mail**: in Brevo, *Settings → Senders & IP → Domains*, add `pacheco.lu` and create the
+   DNS records Brevo shows (a Brevo code, DKIM and DMARC), copying the values from Brevo. Then add the sender
+   (for example `noreply@pacheco.lu`), and in *Settings → SMTP & API* create an SMTP key: the login shown there
+   and that key go in `SMTP_USER` and `SMTP_PASSWORD` in step 6. Sign Brevo's data processing agreement if your
+   account asks for it.
+5. **Install**: on the machine,
 
    ```
    curl -fsSLO https://raw.githubusercontent.com/brunopacheco1/quenya-voices/main/deploy/setup.sh
@@ -94,11 +99,11 @@ You need a Gcore account, a mailbox that can send through SMTP, and a domain nam
    ```
 
    It installs Node.js, Caddy and the site, and starts them. Caddy gets the HTTPS certificate by itself.
-5. **Settings**: fill in `/etc/quenya-voices.env` (`sudo nano /etc/quenya-voices.env`; the template explains
+6. **Settings**: fill in `/etc/quenya-voices.env` (`sudo nano /etc/quenya-voices.env`; the template explains
    each line), then `sudo systemctl restart quenya-voices`. Make the encryption key with
    `openssl rand -base64 32` and keep a copy in your password manager: without it nobody can read the recordings,
    not even for training.
-6. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are a
+7. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are a
    careful draft, not legal advice.
 
 Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.pacheco.lu` pulls the latest code and

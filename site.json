@@ -7,7 +7,7 @@
   "country": "Luxembourg",
   "supervisory_authority": "Commission nationale pour la protection des données (CNPD)",
   "supervisory_authority_url": "https://cnpd.public.lu/",
-  "mail_provider": "",
+  "mail_provider": "Brevo (Sendinblue SAS, Paris, France)",
   "project_url": "https://github.com/brunopacheco1/Quenya-TTS",
   "volunteers_issue_url": "https://github.com/brunopacheco1/ma-quetilye-quenya/issues/38",
   "minimum_training_minutes": 60,
