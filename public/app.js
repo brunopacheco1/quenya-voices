@@ -10,6 +10,7 @@
 import { TAIL_SECONDS, encodeWav, stripStartup } from "./lib/audio.js";
 import { checkMicrophone, checkTake, codes, hasErrors, peakAndClipped } from "./lib/quality.js";
 import { parseScript, sessions } from "./lib/script.js";
+import { nextText } from "./lib/targets.js";
 import { zip } from "./lib/zip.js";
 
 const $ = (id) => document.getElementById(id);
@@ -278,8 +279,8 @@ class App {
     const share = all.accepted_minutes ? ` (${Math.round((100 * mine.accepted_minutes) / all.accepted_minutes)}% of all)` : "";
     $("contribution").replaceChildren(
       element("p", { className: "big", textContent: `${parts.join(" · ")}${share}` }),
-      element("p", {}, `All volunteers: ${minutes(all.accepted_minutes)} of the ${all.minimum_minutes} min needed before any training. `,
-        element("a", { href: "stats.html", textContent: "Progress" })));
+      element("p", {}, `All volunteers: ${minutes(all.accepted_minutes)}. ${nextText(all.targets, all.accepted_minutes)} `,
+        element("a", { href: "stats.html", textContent: "All goals" })));
   }
 
   async reviewerHome() {
@@ -780,7 +781,7 @@ class App {
     $("invite-text").value = [
       "Hello,",
       "",
-      "I would like to invite you to record your voice reading Quenya for an open Quenya text-to-speech voice and the book Ma Quetilyë Quenya?.",
+      "I would like to invite you to record your voice reading Quenya for an open Quenya text-to-speech voice.",
       "",
       `Open ${location.origin}/ and sign in with this e-mail address: you will get a one-time code by e-mail.`,
       `Before you start, please read the Privacy Notice (${location.origin}/privacy.html) and the Terms (${location.origin}/terms.html).`,
@@ -894,7 +895,7 @@ function showSignIn() {
     event.preventDefault();
     const email = $("signin-address").value.trim();
     if (await failed(await post("/api/auth/start", { email }))) return;
-    $("signin-sent").textContent = `If ${email} is invited, a 6-digit code is on its way to it. It works for 15 minutes.`;
+    $("signin-sent").textContent = `If ${email} is invited, a 6-digit code is on its way to it. It works for 15 minutes. At most 3 codes are sent an hour: if none arrives, check your spam folder or wait an hour.`;
     $("signin-email").hidden = true;
     $("signin-code").hidden = false;
     $("signin-number").value = "";

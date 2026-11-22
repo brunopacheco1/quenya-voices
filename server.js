@@ -24,6 +24,11 @@ const TYPES = {
   ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
 };
 
+// What the pages may load: only this site's own files, plus blob: audio (playing takes back) and downloads. Set here
+// rather than in Caddy so that npm run dev shows any violation too.
+export const CSP = "default-src 'self'; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; "
+  + "base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
 // Static files from public/, as a fetch-style handler (the API reads script.tsv through it too).
 export async function serveStatic(request) {
   let path = decodeURIComponent(new URL(request.url).pathname);
@@ -35,7 +40,11 @@ export async function serveStatic(request) {
   try {
     if (!(await stat(file)).isFile()) throw new Error("not a file");
     return new Response(await readFile(file), {
-      headers: { "Content-Type": TYPES[extname(file)] || "application/octet-stream", "Cache-Control": "no-cache" },
+      headers: {
+        "Content-Type": TYPES[extname(file)] || "application/octet-stream",
+        "Cache-Control": "no-cache",
+        "Content-Security-Policy": CSP,
+      },
     });
   } catch {
     return new Response("Not found", { status: 404 });

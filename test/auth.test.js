@@ -17,6 +17,7 @@ async function setup(t) {
   t.after(() => rm(folder, { recursive: true, force: true }));
   const env = {
     ADMINS: "admin@example.org",
+    STORAGE_KEY: Buffer.alloc(32, 7).toString("base64"),
     TAKES: new Encrypted(new FileBucket(folder), await importKey(Buffer.alloc(32, 7).toString("base64"))),
     mails: [],
     sendMail: async (mail) => { env.mails.push(mail); },
@@ -65,7 +66,7 @@ test("strangers get the same answer but no e-mail", async (t) => {
 });
 
 test("a code works once, for 5 tries at most, and codes are limited to 3 an hour", async (t) => {
-  const { call, lastCode } = await setup(t);
+  const { env: { mails }, call, lastCode } = await setup(t);
   const email = "admin@example.org"; // admins are always invited
   await call("/api/auth/start", { json: { email } });
   const code = lastCode();
@@ -77,7 +78,35 @@ test("a code works once, for 5 tries at most, and codes are limited to 3 an hour
   assert.equal((await call("/api/auth/verify", { json: { email, code: lastCode() } })).status, 200);
   assert.equal((await call("/api/auth/verify", { json: { email, code: lastCode() } })).status, 400, "used up");
   assert.equal((await call("/api/auth/start", { json: { email } })).status, 200, "third code in an hour");
-  assert.equal((await call("/api/auth/start", { json: { email } })).status, 429, "fourth code in an hour");
+  const before = mails.length;
+  const fourth = await call("/api/auth/start", { json: { email } });
+  assert.equal(fourth.status, 200, "the same answer as for strangers");
+  assert.deepEqual(await fourth.json(), { sent: true });
+  assert.equal(mails.length, before, "but no fourth code in an hour");
+});
+
+test("many tries at the same time still get only 5 tries", async (t) => {
+  const { env, call, lastCode } = await setup(t);
+  const email = "admin@example.org";
+  await call("/api/auth/start", { json: { email } });
+  const code = lastCode();
+  const guesses = Array.from({ length: 200 }, (_, i) => String(i).padStart(6, "0")).filter((g) => g !== code);
+  guesses.push(code); // the right one last: by then the 5 tries are used up
+  const answers = await Promise.all(guesses.map((guess) => call("/api/auth/verify", { json: { email, code: guess } })));
+  assert.equal(answers.filter((answer) => answer.status === 200).length, 0);
+  assert.ok(env.mails.length === 1);
+});
+
+test("a mail server failure gives the same answer and logs no address", async (t) => {
+  const { env, call } = await setup(t);
+  const logged = [];
+  t.mock.method(console, "error", (...args) => logged.push(args.join(" ")));
+  env.sendMail = async () => { throw Object.assign(new Error("550 admin@example.org rejected"), { code: "EENVELOPE" }); };
+  const response = await call("/api/auth/start", { json: { email: "admin@example.org" } });
+  assert.equal(response.status, 200);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(logged.length, 1);
+  assert.doesNotMatch(logged[0], /@/);
 });
 
 test("signing out, removing the invitation, or erasing the account ends the session", async (t) => {
@@ -105,6 +134,11 @@ test("signing out, removing the invitation, or erasing the account ends the sess
   assert.equal((await erased.json()).invitation, "removed");
   assert.equal((await call("/api/me", { cookie: third })).status, 401);
   assert.deepEqual((await (await call("/api/admin/invites", { cookie: admin })).json()).invites, []);
+  const sessions = await env.TAKES.list({ prefix: "auth/sessions/" });
+  const left = await Promise.all(sessions.objects.map(async (o) => (await (await env.TAKES.get(o.key)).json()).email));
+  assert.deepEqual(left, ["admin@example.org"], "bea's session records are deleted, not only refused");
+  const codes = await env.TAKES.list({ prefix: "auth/codes/" });
+  assert.equal(codes.objects.length, 1, "only the admin's code record is left");
 });
 
 test("old microphone checks and expired sessions are deleted", async (t) => {

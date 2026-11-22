@@ -4,12 +4,14 @@
 
 # Sets up the site on a fresh Ubuntu 24.04 machine, as root:
 #   curl -fsSLO https://raw.githubusercontent.com/brunopacheco1/quenya-voices/main/deploy/setup.sh
-#   sudo bash setup.sh voices.pacheco.lu
+#   sudo bash setup.sh voices.pacheco.lu [version]
+# version is a release tag (for example v1.0.0) or a branch; without it, the latest main.
 # Then fill in /etc/quenya-voices.env and run: sudo systemctl restart quenya-voices
 # Running it again is safe: it updates the code and keeps the settings.
 set -euo pipefail
 
-DOMAIN="${1:?usage: setup.sh <site address, e.g. voices.pacheco.lu>}"
+DOMAIN="${1:?usage: setup.sh <site address, e.g. voices.pacheco.lu> [version]}"
+REF="${2:-main}"
 NODE_MAJOR=22
 APP=/opt/quenya-voices
 
@@ -31,13 +33,20 @@ fi
 
 id quenya &>/dev/null || useradd --system --home-dir "$APP" --shell /usr/sbin/nologin quenya
 if [ -d "$APP/.git" ]; then
-    git -C "$APP" pull -q --ff-only
+    git -C "$APP" fetch -q --tags --force origin
 else
     git clone -q https://github.com/brunopacheco1/quenya-voices.git "$APP"
 fi
+if git -C "$APP" rev-parse -q --verify "refs/tags/$REF^{commit}" > /dev/null; then
+    git -C "$APP" checkout -q --detach "refs/tags/$REF"
+else
+    git -C "$APP" checkout -q --detach "origin/$REF"
+fi
+echo "Deploying $REF ($(git -C "$APP" rev-parse --short HEAD))"
 cd "$APP"
-npm ci --omit=dev --no-audit --no-fund
-python3 build.py
+# --ignore-scripts: no package runs code of its own while installing, as root
+npm ci --omit=dev --no-audit --no-fund --ignore-scripts
+python3 build.py --deploy
 chown -R root:root "$APP"
 chmod -R go-w "$APP"
 
