@@ -11,7 +11,7 @@ Thank you for wanting to help! The project is coordinated by Bruno Pacheco
 
 ## Ways to help
 
-- **Record your voice.** Ask for an invitation in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22) issue.
+- **Record your voice.** Ask for an invitation in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues/7) issue.
 - **Report a problem** with the site: open an issue saying what you did, what you expected, and your browser
   and microphone. Never paste recordings, e-mail addresses or other personal data into an issue.
 - **Improve the code or the texts** with a pull request.

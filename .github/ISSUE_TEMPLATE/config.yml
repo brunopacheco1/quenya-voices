@@ -7,7 +7,7 @@ contact_links:
     url: https://github.com/brunopacheco1/quenya-voices/security/advisories/new
     about: Never in a public issue. See SECURITY.md.
   - name: Ask to record your voice
-    url: https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22
+    url: https://github.com/brunopacheco1/quenya-voices/issues/7
     about: Say hello in the Volunteer voices issue. Do not post your e-mail address there.
   - name: Your own data (download, correction, erasure)
     url: https://voices.pacheco.lu/privacy.html

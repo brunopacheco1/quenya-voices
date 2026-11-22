@@ -9,7 +9,7 @@
   "supervisory_authority_url": "https://cnpd.public.lu/",
   "mail_provider": "Brevo (Sendinblue SAS, Paris, France)",
   "project_url": "https://github.com/brunopacheco1/Quenya-TTS",
-  "volunteers_issue_url": "https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22",
+  "volunteers_issue_url": "https://github.com/brunopacheco1/quenya-voices/issues/7",
   "minimum_training_minutes": 60,
   "training_wait_days": 30,
   "mic_check_retention_months": 12,

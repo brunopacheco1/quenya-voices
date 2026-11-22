@@ -15,7 +15,7 @@ object storage keeps the recordings, encrypted by the server before they are sto
 
 ## Want to record?
 
-Recording is by invitation. Say hello in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22) issue.
+Recording is by invitation. Say hello in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues/7) issue.
 
 ## Related project
 
