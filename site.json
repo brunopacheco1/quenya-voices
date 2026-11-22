@@ -1,17 +1,34 @@
 {
-  "_comment": "Who runs the site, shown in the Privacy Notice, Cookie Policy and Terms. build.py fills them in. Check every value before the first deploy. mail_provider: the company whose mail server sends the sign-in codes, with its country (for example \"Brevo (Sendinblue SAS, France)\").",
+  "_comment": "Who runs the site, shown in the Privacy Notice, Cookie Policy and Terms. build.py fills them in. Check every value before the first deploy. mail_provider: the company whose mail server sends the sign-in codes, with its country (for example \"Brevo (Sendinblue SAS, France)\"). speech_targets: the goals shown on the Progress page, as rough guides (how good a voice gets also depends on how Quenya-TTS trains); the first one must be minimum_training_minutes.",
   "controller": "Bruno Pacheco",
   "controller_address": "Luxembourg",
   "website": "https://bruno.pacheco.lu",
-  "contact_email": "",
+  "contact_email": "privacy@pacheco.lu",
   "country": "Luxembourg",
   "supervisory_authority": "Commission nationale pour la protection des données (CNPD)",
   "supervisory_authority_url": "https://cnpd.public.lu/",
   "mail_provider": "Brevo (Sendinblue SAS, Paris, France)",
   "project_url": "https://github.com/brunopacheco1/Quenya-TTS",
-  "volunteers_issue_url": "https://github.com/brunopacheco1/ma-quetilye-quenya/issues/38",
+  "volunteers_issue_url": "https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22",
   "minimum_training_minutes": 60,
   "training_wait_days": 30,
   "mic_check_retention_months": 12,
-  "last_updated": "2026-10-18"
+  "speech_targets": [
+    {
+      "minutes": 60,
+      "name": "First test voice",
+      "about": "Enough for the first training. A model that already speaks other languages adapts to Quenya: understandable, but rough."
+    },
+    {
+      "minutes": 300,
+      "name": "A better voice",
+      "about": "Clearly more natural, and fewer mistakes."
+    },
+    {
+      "minutes": 600,
+      "name": "A natural voice",
+      "about": "The goal: a voice that reads Quenya naturally. Several hours from the same volunteer help most."
+    }
+  ],
+  "last_updated": "2026-11-22"
 }

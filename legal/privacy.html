@@ -34,8 +34,7 @@ SPDX-License-Identifier: Apache-2.0
             It is never published and reviewers do not see it.</td><td>Your consent (GDPR art. 6(1)(a)); before you
             accept, our legitimate interest in sending the invitation you asked for (art. 6(1)(f)).</td>
             <td>Until you delete your account or ask us to.</td></tr>
-          <tr><td>Your voice recordings</td><td>To review them and train open speech models (for example for the
-            audio of the book <i>Ma Quetilyë Quenya?</i>). Never published.</td>
+          <tr><td>Your voice recordings</td><td>To review them and train open speech models. Never published.</td>
             <td>Your consent (art. 6(1)(a)).</td><td>Drafts: until you delete them. Submitted and accepted recordings:
             until you withdraw your consent.</td></tr>
           <tr><td>The name you want to be credited by (optional), and the date and wording of your consent</td>
@@ -50,7 +49,13 @@ SPDX-License-Identifier: Apache-2.0
           <tr><td>Sign-in codes and sessions (your e-mail address, when you signed in; only scrambled forms of
             the codes and session keys are kept)</td><td>To let you sign in, and limit how many codes are sent.</td>
             <td>Legitimate interest in keeping the site secure (art. 6(1)(f)).</td>
-            <td>Codes: one hour. Sessions: until you sign out, or 30 days.</td></tr>
+            <td>Codes: one hour. Sessions: until you sign out, or 30 days. Both are deleted at once when your
+              invitation is removed or you delete your account.</td></tr>
+          <tr><td>A record that you deleted your account: a scrambled identifier made from your e-mail address with
+            a secret key, and the date. No e-mail address, name or recording.</td><td>To delete the copies of your
+            recordings made for training too, and to prove that we did.</td><td>Legal obligation to erase and to
+            show it (art. 6(1)(c), art. 5(2) and 17).</td><td>As long as any copy for training or model trained
+            on the recordings exists.</td></tr>
         </tbody>
       </table>
     </div>
@@ -81,7 +86,8 @@ SPDX-License-Identifier: Apache-2.0
         e-mail address and the code, nothing else. Its data processing agreement allows some of its subprocessors to
         be outside the European Union (for example in the United States), under the safeguards that agreement sets out.</li>
       <li><b>Reviewers</b> chosen by the project hear your submitted recordings and see the name you want to be credited by,
-        but not your e-mail address.</li>
+        but not your e-mail address. The reviewer's own e-mail address is kept with each decision they make, and
+        is never shown to you.</li>
       <li><b>Gcore</b> also provides the GPU machine that trains the model. For each training, accepted recordings are copied over HTTPS to a
         machine created for that training alone, in one of Gcore's data centres in the European Union, and deleted
         with it, disk included, when the training ends (at the latest after a few hours). Each training copies the recordings
@@ -91,6 +97,8 @@ SPDX-License-Identifier: Apache-2.0
     </ul>
 
     <h2>How we protect it</h2>
+    <p>Inside the storage, your files are named with a scrambled identifier made with a secret key, so even
+      someone who knows your e-mail address cannot tell from the storage whether you take part.</p>
     <p>Your recordings and details stay in the European Union (only the sign-in e-mail goes through
       {{mail_provider}}, as above) and are encrypted in transit (the site and every copy for training use
       HTTPS only) and at rest: the site encrypts every recording and every detail about you (AES-256) before storing

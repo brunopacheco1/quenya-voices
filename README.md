@@ -8,22 +8,19 @@ SPDX-License-Identifier: CC-BY-4.0
 
 A website where invited volunteers record their voice reading Quenya, Tolkien's High-elven, in the browser,
 with nothing to install. The recordings train open Quenya text-to-speech voices in
-[Quenya-TTS](https://github.com/brunopacheco1/Quenya-TTS) and give audio to the community book
-[*Ma Quetilyë Quenya?*](https://github.com/brunopacheco1/ma-quetilye-quenya).
+[Quenya-TTS](https://github.com/brunopacheco1/Quenya-TTS).
 
 It runs on Gcore, in Luxembourg: a small Node.js server behind Caddy serves the page and its API, and Gcore's
 object storage keeps the recordings, encrypted by the server before they are stored.
 
 ## Want to record?
 
-Recording is by invitation. Say hello in the book's
-[Volunteer voices](https://github.com/brunopacheco1/ma-quetilye-quenya/issues/38) issue.
+Recording is by invitation. Say hello in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22) issue.
 
-## Related projects
+## Related project
 
 - [Quenya-TTS](https://github.com/brunopacheco1/Quenya-TTS): the recording script, the pronunciation rules
   (`quenya_g2p`) and the training code. It downloads the accepted recordings with `python -m quenya_tts.volunteers`.
-- [*Ma Quetilyë Quenya?*](https://github.com/brunopacheco1/ma-quetilye-quenya): the book that uses the voices.
 
 ## The recording site
 
@@ -106,8 +103,9 @@ You need a Gcore account, a Brevo account (free) to send the sign-in codes, and 
 7. **Legal details**: fill in `site.json`, especially `contact_email`, and check the texts in `legal/`. They are a
    careful draft, not legal advice.
 
-Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.pacheco.lu` pulls the latest code and
-restarts the site; the settings stay. Logs: `journalctl -u quenya-voices`.
+Updating later: `sudo bash /opt/quenya-voices/deploy/setup.sh voices.pacheco.lu v1.2.0` deploys that release
+tag (leave the tag out for the latest `main`) and restarts the site; the settings stay. Deploying tags means only
+what you released goes live, not whatever was merged last. Logs: `journalctl -u quenya-voices`.
 
 The machine keeps no data of its own (everything is in the object storage), so it needs no backups: a new machine
 with the same settings is the same site. Microphone checks older than `mic_check_retention_months` and expired

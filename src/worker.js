@@ -22,7 +22,8 @@
 //   erasures/<volunteer>.json                            a volunteer deleted their account: drop their local copies
 //   stats/milestones.json                                when the accepted speech first reached the training minimum
 //   config/invites.json, auth/...                         who is invited, sign-in codes and sessions (auth.js)
-// <volunteer> is derived from the e-mail, so the e-mail itself appears only inside encrypted objects.
+// <volunteer> is a keyed hash of the e-mail (volunteerId), so the e-mail itself appears only inside encrypted
+// objects, and nobody can tell from the names whether a known address takes part.
 //
 // Public (no sign-in):
 //   GET  /api/public/stats                          accepted minutes, volunteers, minimum and earliest training date
@@ -55,10 +56,11 @@
 //   POST /api/admin/invites                         {email}: invite
 //   DELETE /api/admin/invites                       {email}: remove the invitation
 
-import { removeExpired, signOut, startSignIn, verifySignIn, volunteerEmail } from "./auth.js";
+import { endSessions, removeExpired, signOut, startSignIn, verifySignIn, volunteerEmail } from "./auth.js";
+import { pseudonym } from "./storage.js";
 import site from "../site.json" with { type: "json" };
 import { CONSENT_VERSION, INTRO, STATEMENTS, cleanName, consentCurrent, consentRecord } from "./consent.js";
-import { changeInvite, listInvites, validEmail } from "./invites.js";
+import { changeInvite, isInvited, listInvites, validEmail } from "./invites.js";
 import { decodeWav, readWavHeader, wavProblem } from "../public/lib/audio.js";
 import { LIMITS, peakAndClipped } from "../public/lib/quality.js";
 import { REASONS, checkReview } from "../public/lib/review.js";
@@ -104,9 +106,8 @@ async function loadScript(env) {
   return script;
 }
 
-export async function volunteerId(email) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email));
-  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+export async function volunteerId(env, email) {
+  return (await pseudonym(env, `volunteer:${email}`)).slice(0, 16);
 }
 
 function json(body, status = 200) {
@@ -386,6 +387,7 @@ async function publicStats(env) {
     minimum_reached_at: reached,
     earliest_training_at: reached ? new Date(Date.parse(reached) + site.training_wait_days * DAY_MS).toISOString() : null,
     training_wait_days: site.training_wait_days,
+    targets: site.speech_targets,
   };
 }
 
@@ -424,7 +426,7 @@ async function handleApi(request, env) {
   }
   const email = await volunteerEmail(request, env);
   if (!email) return error(401, "Not signed in.");
-  const volunteer = await volunteerId(email);
+  const volunteer = await volunteerId(env, email);
   const path = new URL(request.url).pathname;
   const method = request.method;
   const consentKey = `volunteers/${volunteer}/consent.json`;
@@ -513,8 +515,9 @@ async function handleApi(request, env) {
     }
     // No e-mail here: only the id, so copies already downloaded for training can be found and deleted.
     await writeJson(env, `erasures/${volunteer}.json`, { volunteer, erased_at: new Date().toISOString() });
-    // Removing the invitation also ends every session of this address (auth.js checks it on each request).
+    // Removing the invitation also ends every session of this address; their records are deleted too.
     await changeInvite(env, email, false);
+    await endSessions(env, email);
     return withCookie({ ...(await signOut(env, request)), body: { deleted: true, invitation: "removed" } });
   }
 
@@ -532,7 +535,9 @@ async function handleApi(request, env) {
     if (method === "POST" || method === "DELETE") {
       const target = ((await requestJson(request)) || {}).email;
       if (!validEmail(target)) return error(400, "That is not an e-mail address.");
-      return json({ invites: await changeInvite(env, target, method === "POST") });
+      const invites = await changeInvite(env, target, method === "POST");
+      if (method === "DELETE" && !(await isInvited(env, target))) await endSessions(env, target);
+      return json({ invites });
     }
     return error(405, "Method not allowed.");
   }
@@ -616,7 +621,12 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
     let response;
     try {
-      response = await handleApi(request, env);
+      // Browsers send Origin with every request that changes something; a page on another site (even another
+      // *.pacheco.lu one, which the SameSite cookie does not stop) must not act for the signed-in person.
+      const origin = request.headers.get("Origin");
+      response = !["GET", "HEAD"].includes(request.method) && origin !== null && origin !== url.origin
+        ? error(403, "Requests from other sites are refused.")
+        : await handleApi(request, env);
     } catch (err) {
       console.error(err);
       response = error(500, "Something went wrong on the server. Please try again.");

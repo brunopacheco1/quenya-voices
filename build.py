@@ -7,7 +7,8 @@ Prepares the site's static files. npm run dev and npm test run this first (packa
   pronunciation hint.
 - public/privacy.html, cookies.html, terms.html, stats.html: legal/*.html with the values of site.json filled in.
 
-    python3 build.py   # needs only the Python standard library
+    python3 build.py            # needs only the Python standard library
+    python3 build.py --deploy   # deploy/setup.sh: stops if site.json still lacks a contact e-mail
 
 The script and quenya_g2p come from Quenya-TTS at the commit QUENYA_TTS_REF, downloaded once into
 .cache/. To use a local Quenya-TTS checkout instead (offline, or to try a new script), set QUENYA_TTS_DIR.
@@ -76,10 +77,12 @@ def fill(template, site):
     return re.sub(r"\{\{(\w+)\}\}", value, template)
 
 
-def build_legal():
+def build_legal(deploy=False):
     with open(os.path.join(HERE, "site.json"), encoding="utf8") as f:
         site = json.load(f)
     if not site.get("contact_email"):
+        if deploy:
+            sys.exit("contact_email is empty in site.json: the Privacy Notice needs it before the site goes live.")
         print("WARNING: contact_email is empty in site.json; fill it in before inviting anyone.", file=sys.stderr)
     for name in sorted(os.listdir(os.path.join(HERE, "legal"))):
         with open(os.path.join(HERE, "legal", name), encoding="utf8") as f:
@@ -91,4 +94,4 @@ def build_legal():
 
 if __name__ == "__main__":
     build_script()
-    build_legal()
+    build_legal(deploy="--deploy" in sys.argv[1:])

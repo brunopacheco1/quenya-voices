@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Caddy gets and renews the HTTPS certificate (Let's Encrypt) by itself, redirects http:// to https://, and passes
-# requests to the Node server. setup.sh replaces SITE_DOMAIN with the site's address.
+# requests to the Node server. setup.sh replaces SITE_DOMAIN with the site's address. The Content-Security-Policy
+# comes from server.js, so that local development uses the same one.
 SITE_DOMAIN {
 	encode gzip
 	header {

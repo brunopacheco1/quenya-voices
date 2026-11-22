@@ -11,8 +11,7 @@ Thank you for wanting to help! The project is coordinated by Bruno Pacheco
 
 ## Ways to help
 
-- **Record your voice.** Ask for an invitation in the book's
-  [Volunteer voices](https://github.com/brunopacheco1/ma-quetilye-quenya/issues/38) issue.
+- **Record your voice.** Ask for an invitation in the [Volunteer voices](https://github.com/brunopacheco1/quenya-voices/issues?q=is%3Aissue%20in%3Atitle%20%22Volunteer%20voices%22) issue.
 - **Report a problem** with the site: open an issue saying what you did, what you expected, and your browser
   and microphone. Never paste recordings, e-mail addresses or other personal data into an issue.
 - **Improve the code or the texts** with a pull request.
@@ -24,7 +23,8 @@ Thank you for wanting to help! The project is coordinated by Bruno Pacheco
 3. Run the tests (`npm test`) and the [REUSE](https://reuse.software/) check (`reuse lint`) before you push.
 4. Give every new file an SPDX header with its copyright and licence: Apache-2.0 for code, CC-BY-4.0 for
    documentation and page texts. Files that cannot carry a header are listed in [REUSE.toml](REUSE.toml).
-5. Never commit secrets (API tokens, `.dev.vars`), recordings or personal data.
+5. Never commit secrets (keys, passwords, your `.env`), recordings or personal data. Tests use made-up
+   addresses on `example.org`.
 
 ### Privacy and legal texts
 
@@ -32,6 +32,11 @@ The site collects voices and e-mail addresses, so it must keep its promises unde
 affects what is collected, who sees it, how long it is kept or how it is used must update the Privacy Notice,
 Cookie Policy or Terms in the same pull request, and set `last_updated` in `site.json` so that volunteers accept
 the new version. Say so clearly in the pull request description.
+
+### Security
+
+Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) explains, never in an issue or pull request.
+Changes to sign-in, storage, encryption or `deploy/` get an extra careful review.
 
 ## Code of Conduct
 

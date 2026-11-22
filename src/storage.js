@@ -9,7 +9,8 @@
 //   list({prefix, cursor, include})         -> {objects: [{key, size, customMetadata?}], truncated, cursor}
 // Encrypted wraps either one: every object, and its metadata, is encrypted with AES-256-GCM before it leaves the
 // server, with a key only the server and the training script have (STORAGE_KEY). The storage provider sees only
-// the object names, which hold no e-mail addresses (see worker.js).
+// the object names, which hold no e-mail addresses: only keyed hashes of them (pseudonym), which cannot be
+// recomputed from an address without STORAGE_KEY.
 
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
@@ -197,6 +198,28 @@ export async function unseal(key, bytes) {
   if (bytes.byteLength < OVERHEAD || MAGIC.some((byte, i) => bytes[i] !== byte)) throw new Error("not an encrypted object");
   const iv = bytes.subarray(MAGIC.length, MAGIC.length + 12);
   return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, bytes.subarray(MAGIC.length + 12)));
+}
+
+// A keyed hash of text (hex HMAC-SHA256), with a key derived from STORAGE_KEY: names objects after a person
+// without revealing who, even to someone who knows their e-mail address.
+const pseudonymKeys = new Map();
+export async function pseudonym(env, text) {
+  if (!pseudonymKeys.has(env.STORAGE_KEY)) {
+    pseudonymKeys.set(env.STORAGE_KEY, (async () => {
+      await importKey(env.STORAGE_KEY); // the same check of the key
+      const raw = await crypto.subtle.importKey("raw", Buffer.from(env.STORAGE_KEY, "base64"), "HKDF", false, ["deriveKey"]);
+      return crypto.subtle.deriveKey(
+        { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(), info: new TextEncoder().encode("quenya-voices pseudonyms") },
+        raw, { name: "HMAC", hash: "SHA-256", length: 256 }, false, ["sign"],
+      );
+    })());
+  }
+  const key = await pseudonymKeys.get(env.STORAGE_KEY).catch((err) => {
+    pseudonymKeys.delete(env.STORAGE_KEY);
+    throw err;
+  });
+  const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return Buffer.from(digest).toString("hex");
 }
 
 export class Encrypted {

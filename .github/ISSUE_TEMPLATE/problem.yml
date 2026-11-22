@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Bruno Pacheco (https://bruno.pacheco.lu)
+# SPDX-License-Identifier: Apache-2.0
+
+name: Problem with the site
+description: Something does not work, or works differently than expected.
+body:
+  - type: markdown
+    attributes:
+      value: >
+        **This issue is public.** Do not paste recordings, e-mail addresses, sign-in codes, names or other personal
+        data, yours or anyone else's. Security problems go to the private form instead (see SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What you did, and what happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Browser, system and microphone
+      placeholder: Firefox 140 on Windows 11, USB headset
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This issue contains no personal data.
+          required: true

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import worker from "../src/worker.js";
+import site from "../site.json" with { type: "json" };
 import { encodeWav } from "../public/lib/audio.js";
 import { RATE, take } from "./signals.js";
 
@@ -47,6 +48,7 @@ const SCRIPT = "id\ttext\tsource\tgloss\n"
 function setup() {
   const env = {
     DEV_EMAIL: "ana@example.org",
+    STORAGE_KEY: Buffer.alloc(32, 9).toString("base64"),
     REVIEWERS: "Rev@Example.org, other@example.org",
     TAKES: new FakeBucket(),
     mails: [],
@@ -77,6 +79,30 @@ test("plain HTTP is sent to HTTPS, and API answers ask browsers to stay on HTTPS
   assert.equal(redirect.headers.get("Location"), "https://x.workers.dev/api/me?a=1");
   const answer = await worker.fetch(new Request("https://x.workers.dev/api/public/stats"), env);
   assert.equal(answer.headers.get("Strict-Transport-Security"), "max-age=31536000");
+});
+
+test("requests that change something are refused from other sites", async () => {
+  const { env, ana } = setup();
+  await ana("/api/consent", { method: "POST", json: { agree: true } });
+  const from = (origin) => worker.fetch(new Request("http://localhost:8787/api/recordings", {
+    method: "POST", headers: { "Content-Type": "text/plain", ...(origin ? { Origin: origin } : {}) }, body: '{"session":1}',
+  }), env);
+  assert.equal((await from("https://evil.pacheco.lu")).status, 403);
+  assert.equal((await from("null")).status, 403);
+  assert.equal((await from("http://localhost:8787")).status, 201, "the site itself");
+  const read = await worker.fetch(new Request("http://localhost:8787/api/me", { headers: { Origin: "https://evil.example" } }), env);
+  assert.equal(read.status, 200, "reading is not refused: the cookie and CORS already protect it");
+});
+
+test("volunteer ids are keyed hashes: the e-mail and its plain hash cannot be found in the storage", async () => {
+  const { env, ana } = setup();
+  const me = await body(await ana("/api/me"));
+  assert.match(me.volunteer, /^[0-9a-f]{16}$/);
+  const { createHash } = await import("node:crypto");
+  assert.notEqual(me.volunteer, createHash("sha256").update("ana@example.org").digest("hex").slice(0, 16));
+  const other = { ...env, STORAGE_KEY: Buffer.alloc(32, 1).toString("base64") };
+  const { volunteerId } = await import("../src/worker.js");
+  assert.notEqual(await volunteerId(other, "ana@example.org"), me.volunteer, "depends on the key");
 });
 
 test("the page itself is served from the static assets", async () => {
@@ -293,6 +319,7 @@ test("public totals need no sign-in; the training minimum starts the waiting mon
   const stats = async () => body(await worker.fetch(new Request("https://x.workers.dev/api/public/stats"), env));
   assert.deepEqual(await stats(), {
     accepted_minutes: 0, volunteers: 0, minimum_minutes: 60, minimum_reached_at: null, earliest_training_at: null, training_wait_days: 30,
+    targets: site.speech_targets,
   });
   await env.TAKES.put("accepted/0123456789abcdef/rold000001", "", { customMetadata: { seconds: "3598", name: "" } });
   assert.equal((await stats()).minimum_reached_at, null);

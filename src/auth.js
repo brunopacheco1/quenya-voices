@@ -3,20 +3,25 @@
 
 // Sign-in with a one-time code sent by e-mail, for invited people only (see invites.js).
 //
-// 1. POST /api/auth/start {email}: if the address is invited, a 6-digit code is e-mailed to it. The answer is the
-//    same whether it is invited or not, so the site does not tell strangers who takes part.
+// 1. POST /api/auth/start {email}: if the address is invited, a 6-digit code is e-mailed to it (3 an hour at most).
+//    The answer is the same whether it is invited, rate-limited or not, so the site does not tell strangers who
+//    takes part.
 // 2. POST /api/auth/verify {email, code}: a right code (within 15 minutes, at most 5 tries) starts a session: a
 //    random token in an HttpOnly, Secure, SameSite=Lax cookie, valid for 30 days.
 // 3. POST /api/auth/signout ends it.
 // Every request checks the session and that the address is still invited, so removing an invitation (or erasing
-// an account) signs that person out everywhere.
+// an account) signs that person out everywhere; both also delete that person's codes and sessions (endSessions).
+//
+// Codes and tries are counted in storage, which has no atomic updates, so this server handles the sign-in requests
+// of one address one at a time (oneAtATime). That holds because it runs as a single process (deploy/).
 //
 // Storage (encrypted, like everything else):
-//   auth/codes/<email hash>.json      {code_hash, expires_at, attempts, sent: [times]}
-//   auth/sessions/<token hash>.json   {email, created_at, expires_at}
+//   auth/codes/<keyed e-mail hash>.json   {code_hash, expires_at, attempts, sent: [times]}
+//   auth/sessions/<token hash>.json       {email, created_at, expires_at}
 // Only hashes of the codes and tokens are stored.
 
 import { isInvited, validEmail } from "./invites.js";
+import { pseudonym } from "./storage.js";
 
 export const SESSION_COOKIE = "qv_session";
 const CODE_MINUTES = 15;
@@ -31,6 +36,21 @@ async function sha256(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+// Runs fn after every earlier call with the same key has finished.
+const queues = new Map();
+async function oneAtATime(key, fn) {
+  const run = (queues.get(key) || Promise.resolve()).then(fn, fn);
+  const done = run.then(() => {}, () => {});
+  queues.set(key, done);
+  try {
+    return await run;
+  } finally {
+    if (queues.get(key) === done) queues.delete(key);
+  }
+}
+
+const codeKey = async (env, email) => `auth/codes/${await pseudonym(env, `sign-in code:${email}`)}.json`;
 
 function randomCode() {
   // 6 digits, without modulo bias
@@ -85,20 +105,25 @@ export async function startSignIn(env, form, now = Date.now()) {
   if (!validEmail(email)) return { status: 400, body: { error: "That is not an e-mail address." } };
   const answer = { status: 200, body: { sent: true } };
   if (!(await isInvited(env, email))) return answer;
-  const key = `auth/codes/${await sha256(email)}.json`;
-  const previous = await readJson(env, key);
-  const sent = (previous?.sent || []).filter((time) => now - Date.parse(time) < HOUR_MS);
-  if (sent.length >= CODES_PER_HOUR) {
-    return { status: 429, body: { error: "Too many codes were sent to this address. Please wait an hour and try again." } };
-  }
-  const code = randomCode();
-  await writeJson(env, key, {
-    code_hash: await sha256(`${email}:${code}`),
-    expires_at: new Date(now + CODE_MINUTES * 60 * 1000).toISOString(),
-    attempts: 0,
-    sent: [...sent, new Date(now).toISOString()],
+  const key = await codeKey(env, email);
+  const code = await oneAtATime(key, async () => {
+    const previous = await readJson(env, key);
+    const sent = (previous?.sent || []).filter((time) => now - Date.parse(time) < HOUR_MS);
+    // silently: a different answer would tell strangers that the address is invited
+    if (sent.length >= CODES_PER_HOUR) return null;
+    const fresh = randomCode();
+    await writeJson(env, key, {
+      code_hash: await sha256(`${email}:${fresh}`),
+      expires_at: new Date(now + CODE_MINUTES * 60 * 1000).toISOString(),
+      attempts: 0,
+      sent: [...sent, new Date(now).toISOString()],
+    });
+    return fresh;
   });
-  await env.sendMail({
+  if (!code) return answer;
+  // Not awaited: a slow or failing mail server must not make the answer differ for invited addresses. The error
+  // is logged without the address.
+  Promise.resolve().then(() => env.sendMail({
     to: email,
     subject: `Your Quenya Voices sign-in code: ${code}`,
     text: [
@@ -106,7 +131,7 @@ export async function startSignIn(env, form, now = Date.now()) {
       "",
       `It works for ${CODE_MINUTES} minutes. If you did not ask for it, you can ignore this e-mail.`,
     ].join("\n"),
-  });
+  })).catch((err) => console.error(`a sign-in code could not be sent: ${err?.code || err?.name || "error"}`));
   return answer;
 }
 
@@ -116,15 +141,19 @@ export async function verifySignIn(env, form, request, now = Date.now()) {
   const code = typeof form?.code === "string" ? form.code.replace(/\s/g, "") : "";
   const wrong = { status: 400, body: { error: "The code is wrong or has expired. Ask for a new one." } };
   if (!validEmail(email) || !/^\d{6}$/.test(code)) return wrong;
-  const key = `auth/codes/${await sha256(email)}.json`;
-  const stored = await readJson(env, key);
-  if (!stored || !stored.code_hash || Date.parse(stored.expires_at) < now || stored.attempts >= MAX_ATTEMPTS) return wrong;
-  if (!sameText(await sha256(`${email}:${code}`), stored.code_hash)) {
-    await writeJson(env, key, { ...stored, attempts: stored.attempts + 1 });
-    return wrong;
-  }
-  // used up, but the sending times stay for the hourly limit
-  await writeJson(env, key, { sent: stored.sent });
+  const key = await codeKey(env, email);
+  const right = await oneAtATime(key, async () => {
+    const stored = await readJson(env, key);
+    if (!stored || !stored.code_hash || Date.parse(stored.expires_at) < now || stored.attempts >= MAX_ATTEMPTS) return false;
+    if (!sameText(await sha256(`${email}:${code}`), stored.code_hash)) {
+      await writeJson(env, key, { ...stored, attempts: stored.attempts + 1 });
+      return false;
+    }
+    // used up, but the sending times stay for the hourly limit
+    await writeJson(env, key, { sent: stored.sent });
+    return true;
+  });
+  if (!right) return wrong;
   if (!(await isInvited(env, email))) return wrong;
   const token = randomToken();
   await writeJson(env, `auth/sessions/${await sha256(token)}.json`, {
@@ -139,6 +168,20 @@ export async function signOut(env, request) {
   const token = cookie(request, SESSION_COOKIE);
   if (token && token.length <= 100) await env.TAKES.delete(`auth/sessions/${await sha256(token)}.json`);
   return { status: 200, body: { signed_out: true }, cookie: sessionCookie("", request, 0) };
+}
+
+// Deletes every code and session of an address: when its invitation is removed or the account erased.
+export async function endSessions(env, email) {
+  const target = normalize(email);
+  await env.TAKES.delete(await codeKey(env, target));
+  let cursor;
+  do {
+    const page = await env.TAKES.list({ prefix: "auth/sessions/", cursor });
+    for (const object of page.objects) {
+      if ((await readJson(env, object.key))?.email === target) await env.TAKES.delete(object.key);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
 }
 
 // Deletes expired codes and sessions (run daily by server.js).
